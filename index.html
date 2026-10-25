@@ -1,0 +1,756 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>14-Card Joker Poker Solver</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gloock&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: score-pad tool — input column (deck + hand) beside a results column; stacks on phones */
+:root {
+  --paper: #eef1ec;
+  --card: #fbfcf9;
+  --ink: #18221e;
+  --muted: #5c6b64;
+  --line: #d3dad4;
+  --jade: #1d6a53;
+  --jade-soft: #dcebe4;
+  --cinnabar: #b3312a;
+  --gold: #9a6a12;
+  --good: #1d7a4a;
+  --bad: #b3312a;
+  --f-display: "Gloock", Georgia, "Times New Roman", serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1613; --card: #18211d; --ink: #e4ebe6; --muted: #92a39b; --line: #2b3832;
+    --jade: #5cb898; --jade-soft: #1e3a30; --cinnabar: #ec6f62; --gold: #d9a646; --good: #5cc48a; --bad: #ec6f62;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f1613; --card: #18211d; --ink: #e4ebe6; --muted: #92a39b; --line: #2b3832;
+  --jade: #5cb898; --jade-soft: #1e3a30; --cinnabar: #ec6f62; --gold: #d9a646; --good: #5cc48a; --bad: #ec6f62;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: grid; gap: 6px; }
+h1 { font-family: var(--f-display); font-weight: 400; font-size: clamp(1.7rem, 4vw, 2.4rem); line-height: 1.1; margin: 0; text-wrap: balance; }
+.sub { color: var(--muted); margin: 0; max-width: 70ch; }
+.rules { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.chip { font-size: 12px; letter-spacing: .02em; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; color: var(--muted); background: var(--card); }
+.chip.hot { color: var(--gold); border-color: var(--gold); }
+.chip.green { color: var(--jade); border-color: var(--jade); }
+.grid { display: grid; grid-template-columns: minmax(0, 470px) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 480px) { .panel { padding: 14px 12px; } .pick { font-size: 11px; padding: 5px 0 4px; } .pick .s { font-size: 11px; } .deckrow { gap: 2px; } }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.label { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); font-weight: 600; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { font: inherit; font-weight: 500; border: 0; background: transparent; color: var(--ink); padding: 9px 8px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--jade); color: var(--card); }
+.seg button .n { font-family: var(--f-mono); font-size: 13px; opacity: .85; }
+.entry { display: flex; gap: 8px; }
+.entry input { flex: 1; min-width: 0; font: 14px var(--f-mono); padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); color: var(--ink); }
+button.btn { font: inherit; font-weight: 500; border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 7px; padding: 8px 14px; cursor: pointer; }
+button.btn:hover { border-color: var(--jade); }
+button.primary { background: var(--jade); color: var(--card); border-color: var(--jade); font-weight: 600; }
+button.primary:disabled { opacity: .5; cursor: default; }
+:focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; }
+.deck { display: grid; gap: 4px; overflow-x: auto; }
+.deckrow { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 3px; }
+.pick { font: 500 13px var(--f-mono); border: 1px solid var(--line); background: var(--paper); border-radius: 5px; padding: 6px 0 5px; cursor: pointer; color: var(--ink); line-height: 1.1; text-align: center; }
+.pick.red { color: var(--cinnabar); }
+.pick .s { display: block; font-size: 12px; }
+.pick.inhand { background: var(--jade); color: var(--card); border-color: var(--jade); }
+.pick.infu { background: transparent; border-style: dashed; border-color: var(--gold); color: var(--gold); }
+.pick:disabled { opacity: .35; cursor: default; }
+.jokers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
+.tray { display: flex; flex-wrap: wrap; gap: 5px; min-height: 52px; align-items: center; padding: 8px; border: 1px dashed var(--line); border-radius: 8px; }
+.tray .empty { color: var(--muted); font-size: 13px; }
+.c { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: 38px; height: 52px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); font-family: var(--f-mono); font-weight: 500; font-size: 15px; line-height: 1.05; color: var(--ink); box-shadow: 0 1px 0 var(--line); }
+.c .s { font-size: 15px; }
+.c.red { color: var(--cinnabar); }
+.c.jk { color: var(--gold); border-color: var(--gold); font-size: 10px; letter-spacing: .05em; }
+.c.jk .s { font-size: 17px; }
+button.c { cursor: pointer; padding: 0; }
+.c.sm { width: 24px; height: 34px; font-size: 11px; border-radius: 4px; }
+.c.sm .s { font-size: 12px; }
+.c.sm.jk { font-size: 8px; }
+.c.sm.jk .s { font-size: 13px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.controls select { font: inherit; padding: 7px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); color: var(--ink); }
+.msg { font-size: 13px; color: var(--muted); min-height: 1em; margin: 0; }
+.msg.err { color: var(--bad); }
+#res-body { min-width: 0; display: grid; gap: 14px; }
+#res-body > * { min-width: 0; }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+/* results */
+.summary { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+.ev { font-family: var(--f-display); font-size: clamp(2.4rem, 6vw, 3.4rem); line-height: 1; font-variant-numeric: tabular-nums; }
+.ev.pos { color: var(--good); } .ev.neg { color: var(--bad); }
+.evsub { color: var(--muted); font-size: 13px; }
+.progress { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.progress > div { height: 100%; background: var(--jade); width: 0; transition: width .2s; }
+.rowset { display: grid; gap: 10px; }
+.row { display: grid; grid-template-columns: 74px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); }
+.row .name { font-family: var(--f-display); font-size: 1.15rem; }
+.row.discard { background: transparent; border-style: dashed; }
+.row .name small { display: block; font-family: var(--f-body); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.row .cards { display: flex; flex-wrap: wrap; gap: 4px; }
+.row .desc { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.row .desc b { color: var(--ink); font-weight: 500; }
+.roy { display: inline-block; font-size: 11px; color: var(--gold); border: 1px solid var(--gold); border-radius: 999px; padding: 0 7px; margin-left: 6px; }
+.row .pts { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.row .pts .v { font-size: 1.15rem; font-weight: 500; }
+.row .pts .w { font-size: 12px; color: var(--muted); }
+@media (max-width: 520px) {
+  .row { grid-template-columns: minmax(0, 1fr) auto; }
+  .row .name { grid-column: 1 / -1; display: flex; gap: 8px; align-items: baseline; }
+  .row .name small { display: inline; }
+}
+.pos { color: var(--good); } .neg { color: var(--bad); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.stat { border-top: 1px solid var(--line); padding-top: 6px; }
+.stat .k { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.stat .v { font-family: var(--f-mono); font-size: 1rem; font-variant-numeric: tabular-nums; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 620px; }
+th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.num, th.num { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td .mini { display: flex; flex-wrap: nowrap; gap: 2px; margin-bottom: 2px; }
+td .d { color: var(--muted); font-size: 12px; }
+tr.alt { cursor: pointer; } tr.alt:hover td { background: var(--jade-soft); }
+tr.sel td { background: var(--jade-soft); }
+.natural { border: 1px solid var(--gold); border-radius: 9px; padding: 14px; display: grid; gap: 6px; }
+.natural h3 { font-family: var(--f-display); font-weight: 400; font-size: 1.5rem; margin: 0; color: var(--gold); }
+details { border-top: 1px solid var(--line); padding-top: 10px; }
+summary { cursor: pointer; font-weight: 500; }
+details ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 13px; display: grid; gap: 4px; max-width: 80ch; }
+h2 { font-family: var(--f-display); font-weight: 400; font-size: 1.35rem; margin: 0; }
+.headline { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+@media (prefers-reduced-motion: reduce) { .progress > div { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>14-Card Joker Poker Solver</h1>
+    <p class="sub">Enter your 14 cards. The solver tries every discard and every legal front–middle–back setup, deals the other 42 cards to three opponents hundreds of times, and ranks setups by expected points.</p>
+    <div class="rules">
+      <span class="chip">56 cards · 14 each · discard 1</span>
+      <span class="chip">4 jokers wild</span>
+      <span class="chip">1 point per row</span>
+      <span class="chip">Scoop doubles everything</span>
+      <span class="chip">Scoop all 3 pays ×4</span>
+      <span class="chip">Royalties paid only when the row wins</span>
+      <span class="chip hot">2–3 jokers up front need a straight or better in the middle</span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section class="panel" aria-label="Cards">
+      <form class="entry" id="entry-form">
+        <input id="entry" autocomplete="off" spellcheck="false" placeholder="Type cards: As Kd 10h 9c jk …" aria-label="Type cards">
+        <button class="btn" type="submit">Set</button>
+      </form>
+      <div class="deck" id="deck" aria-label="Deck"></div>
+      <div>
+        <div class="label">Your hand · <span id="n-hand">0/14</span></div>
+        <div class="tray" id="tray-hand"></div>
+      </div>
+      <div class="controls">
+        <button class="btn primary" id="solve">Solve hand</button>
+        <select id="sims" aria-label="Precision">
+          <option value="250">Quick · 250 deals</option>
+          <option value="800" selected>Standard · 800 deals</option>
+          <option value="2000">Precise · 2,000 deals</option>
+        </select>
+        <button class="btn" id="random">Random deal</button>
+        <button class="btn" id="clear">Clear</button>
+      </div>
+      <p class="msg" id="msg" role="status"></p>
+      <p class="note">Typing: ranks A K Q J 10 (or T) 9–2, suits s h c d (or ♠♥♣♦), jokers as <code>jk</code>. Typing replaces your hand. Click a card in your hand to remove it.</p>
+    </section>
+
+    <section class="panel" id="results" aria-live="polite">
+      <div class="headline"><h2 id="res-title">Best setup</h2><span class="chip" id="res-tag" hidden></span></div>
+      <div class="progress" id="progress" hidden><div></div></div>
+      <div id="res-body"><p class="note">Pick 14 cards and press Solve.</p></div>
+    </section>
+  </div>
+
+  <details class="panel">
+    <summary>How points are counted</summary>
+    <ul>
+      <li>Four players get 14 cards each from the 56-card deck. Each player discards one card, which is out of play, and sets the other 13 as front (3), middle (5) and back (5). The solver picks your discard.</li>
+      <li>Each row you win against an opponent pays 1 point plus that row's royalty. Each row you lose costs 1 point plus the opponent's royalty. Royalties are paid only when the row wins.</li>
+      <li>Winning all three rows against one opponent doubles everything won from that opponent, royalties included. Losing all three doubles what you pay.</li>
+      <li>Scooping all three opponents doubles again what each one pays you (×4 in total). The same applies against you: an opponent who scoops you and both other players collects ×4 from you.</li>
+      <li>Royalties. Front: trips 2, two jokers 19, three jokers 29 (each in place of the trips 2). Middle: full house 1, quads 7, straight flush 9, five of a kind 19. Back: quads 3, straight flush 4, five of a kind 9.</li>
+      <li>Two jokers in the front make trips of the third card (two jokers with a 5 are three 5s). Three jokers are three Aces. Either way, the middle must be a straight or better.</li>
+      <li>There are no naturals and no face-up cards, so nothing doubles the stakes.</li>
+      <li>Straights rank A-K-Q-J-10, then A-2-3-4-5, then K-high down to 6-high. Ties go to the suit of the highest card (♠ ♥ ♣ ♦). A joker that decides a suit tiebreak counts as a spade. In a flush, jokers become the highest missing ranks.</li>
+      <li>Opponents choose their discard and set their hands with a strength model that weighs each row's chance of winning and royalties, tuned on tens of thousands of simulated 14-card hands. They never foul. Real opponents may play better or worse, so treat the totals as estimates.</li>
+      <li>"Per row" values include the scoop doubling, so front + middle + back = total. Every setup is scored against the same simulated deals, so the ranking between setups is sharper than the ± range suggests.</li>
+    </ul>
+  </details>
+</div>
+
+<script type="text/plain" id="engine-src">// ===== Chinese Poker with Jokers — hand engine =====
+// Card ids: 0..51 = (rank-2)*4 + suit, suit 0=♦ 1=♣ 2=♥ 3=♠ ; 52..55 = jokers
+var SUIT_CH = ['♦', '♣', '♥', '♠'];
+var RANK_CH = ['', '', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+var RANK_NAME = ['', '', 'Twos', 'Threes', 'Fours', 'Fives', 'Sixes', 'Sevens', 'Eights', 'Nines', 'Tens', 'Jacks', 'Queens', 'Kings', 'Aces'];
+var CAT_NAME = ['High card', 'Pair', 'Two pair', 'Three of a kind', 'Straight', 'Flush', 'Full house', 'Four of a kind', 'Straight flush', 'Five of a kind'];
+var KEY_CAT_DIV = 4194304; // 16^5 * 4
+
+function pack(cat, a, b, c, d, e, s) { return ((((((cat * 16 + a) * 16 + b) * 16 + c) * 16 + d) * 16 + e) * 4 + s); }
+function keyCat(k) { return Math.floor(k / KEY_CAT_DIV); }
+function keyVal(k) { return Math.floor(k / 4); }
+function keySlots(k) { var v = Math.floor(k / 4), out = []; for (var i = 4; i >= 0; i--) { out[i] = v % 16; v = Math.floor(v / 16); } return out; }
+
+// Straight windows, best first. o = order (10 = A-high ... 1 = 6-high), t = top card rank (for suit tiebreak)
+var ST_WIN = [];
+(function () {
+  function bits(arr) { var m = 0; for (var i = 0; i < arr.length; i++) m |= (1 << arr[i]); return m; }
+  ST_WIN.push({ m: bits([10, 11, 12, 13, 14]), o: 10, t: 14 });
+  ST_WIN.push({ m: bits([14, 2, 3, 4, 5]), o: 9, t: 14 });
+  for (var top = 13; top >= 6; top--) ST_WIN.push({ m: bits([top - 4, top - 3, top - 2, top - 1, top]), o: top - 5, t: top });
+})();
+
+var _C = new Int32Array(16), _BS = new Int32Array(16);
+
+// Best key for a 5-card row (jokers wild; a joker deciding a suit tiebreak counts as a spade)
+function eval5(h) {
+  var r, i;
+  for (r = 2; r <= 14; r++) { _C[r] = 0; _BS[r] = -1; }
+  var j = 0, n = 0, fs = -1, same = true, mask = 0, dup = false;
+  for (i = 0; i < 5; i++) {
+    var id = h[i];
+    if (id >= 52) { j++; continue; }
+    r = (id >> 2) + 2; var s = id & 3; n++;
+    if (_C[r]) dup = true;
+    _C[r]++; if (s > _BS[r]) _BS[r] = s; mask |= (1 << r);
+    if (fs < 0) fs = s; else if (fs !== s) same = false;
+  }
+  // Five of a kind
+  if (j > 0 && (mask & (mask - 1)) === 0) {
+    for (r = 14; r >= 2; r--) if (_C[r]) return pack(9, r, 0, 0, 0, 0, 3);
+  }
+  // Straight window
+  var st = null;
+  if (!dup) for (i = 0; i < ST_WIN.length; i++) if ((mask & ~ST_WIN[i].m) === 0) { st = ST_WIN[i]; break; }
+  if (st && same) return pack(8, st.o, 0, 0, 0, 0, fs);
+  // Four of a kind
+  for (r = 14; r >= 2; r--) {
+    if (_C[r] && _C[r] + j >= 4) {
+      var used = 4 - _C[r]; if (used < 0) used = 0;
+      var lj = j - used, kick = 0;
+      if (lj > 0) kick = 14;
+      else for (var r2 = 14; r2 >= 2; r2--) if (r2 !== r && _C[r2]) { kick = r2; break; }
+      return pack(7, r, kick, 0, 0, 0, used > 0 ? 3 : _BS[r]);
+    }
+  }
+  // Full house
+  if (j === 0) {
+    var r3 = 0, rp = 0;
+    for (r = 14; r >= 2; r--) { if (_C[r] === 3) r3 = r; else if (_C[r] === 2) rp = r; }
+    if (r3 && rp) return pack(6, r3, rp, 0, 0, 0, _BS[r3]);
+  } else if (j === 1) {
+    var ps = [];
+    for (r = 14; r >= 2; r--) if (_C[r] === 2) ps.push(r);
+    if (ps.length === 2) return pack(6, ps[0], ps[1], 0, 0, 0, 3);
+  }
+  // Flush (jokers fill the highest ranks not already held)
+  if (same) {
+    var fr = [];
+    for (r = 14; r >= 2; r--) if (_C[r]) fr.push(r);
+    var need = j;
+    for (r = 14; r >= 2 && need > 0; r--) if (!_C[r]) { fr.push(r); need--; }
+    fr.sort(function (a, b) { return b - a; });
+    return pack(5, fr[0], fr[1], fr[2], fr[3], fr[4], fs);
+  }
+  // Straight
+  if (st) return pack(4, st.o, 0, 0, 0, 0, _C[st.t] ? _BS[st.t] : 3);
+  // Three of a kind
+  for (r = 14; r >= 2; r--) {
+    if (_C[r] && _C[r] + j >= 3) {
+      var u3 = 3 - _C[r]; var ks = [];
+      for (var r4 = 14; r4 >= 2; r4--) if (r4 !== r && _C[r4]) ks.push(r4);
+      return pack(3, r, ks[0] || 0, ks[1] || 0, 0, 0, u3 > 0 ? 3 : _BS[r]);
+    }
+  }
+  var lst = [];
+  for (r = 14; r >= 2; r--) if (_C[r]) lst.push(r);
+  // Two pair (no jokers possible here)
+  var pairs = [], singles = [];
+  for (i = 0; i < lst.length; i++) { if (_C[lst[i]] === 2) pairs.push(lst[i]); else singles.push(lst[i]); }
+  if (pairs.length === 2) return pack(2, pairs[0], pairs[1], singles[0], 0, 0, _BS[pairs[0]]);
+  if (j === 1) return pack(1, lst[0], lst[1], lst[2], lst[3], 0, 3);
+  if (pairs.length === 1) return pack(1, pairs[0], singles[0], singles[1], singles[2], 0, _BS[pairs[0]]);
+  return pack(0, lst[0], lst[1], lst[2], lst[3], lst[4], _BS[lst[0]]);
+}
+
+// Best key for the 3-card front (no straights/flushes)
+function eval3(h) {
+  var j = 0, rs = [], ss = [];
+  for (var i = 0; i < 3; i++) { var id = h[i]; if (id >= 52) j++; else { rs.push((id >> 2) + 2); ss.push(id & 3); } }
+  if (j === 3) return pack(3, 14, 0, 0, 0, 0, 3);
+  if (j === 2) return pack(3, rs[0], 0, 0, 0, 0, 3);
+  if (j === 1) {
+    if (rs[0] === rs[1]) return pack(3, rs[0], 0, 0, 0, 0, 3);
+    return pack(1, Math.max(rs[0], rs[1]), Math.min(rs[0], rs[1]), 0, 0, 0, 3);
+  }
+  // sort by rank desc, suit desc
+  var idx = [0, 1, 2].sort(function (a, b) { return (rs[b] - rs[a]) || (ss[b] - ss[a]); });
+  var a = rs[idx[0]], b = rs[idx[1]], c = rs[idx[2]];
+  if (a === b && b === c) return pack(3, a, 0, 0, 0, 0, ss[idx[0]]);
+  if (a === b) return pack(1, a, c, 0, 0, 0, ss[idx[0]]);
+  if (b === c) return pack(1, b, a, 0, 0, 0, ss[idx[1]]);
+  return pack(0, a, b, c, 0, 0, ss[idx[0]]);
+}
+
+
+// ---- 14-card variant: royalties ----
+function royFront(key, jokers) { if (keyCat(key) !== 3) return 0; return jokers >= 3 ? 29 : jokers === 2 ? 19 : 2; }
+function royMid(key) { var c = keyCat(key); return c === 6 ? 1 : c === 7 ? 7 : c === 8 ? 9 : c === 9 ? 19 : 0; }
+function royBack(key) { var c = keyCat(key); return c === 7 ? 3 : c === 8 ? 4 : c === 9 ? 9 : 0; }
+
+// ---- 14-card enumeration: back(5) + middle(5) + front(3) + 1 discard ----
+var NB = 14, FULL = (1 << NB) - 1, SZ = 1 << NB;
+function popc(x) { var c = 0; while (x) { x &= x - 1; c++; } return c; }
+var M5 = [], M3 = [], C95 = [];
+(function () {
+  for (var m = 0; m < SZ; m++) { var p = popc(m); if (p === 5) M5.push(m); else if (p === 3) M3.push(m); }
+  for (var k = 0; k < 512; k++) if (popc(k) === 5) { var pos = []; for (var b = 0; b < 9; b++) if (k & (1 << b)) pos.push(b); C95.push(pos); }
+})();
+var K5 = new Int32Array(SZ), V5 = new Int32Array(SZ), CAT5 = new Int8Array(SZ), K3 = new Int32Array(SZ), V3 = new Int32Array(SZ), J3 = new Int8Array(SZ);
+var SM = new Float64Array(SZ), SB = new Float64Array(SZ), SF = new Float64Array(SZ);
+var _h5 = [0, 0, 0, 0, 0], _h3 = [0, 0, 0];
+
+function computeSubsets(ids) {
+  var i, m, k, b, key;
+  for (i = 0; i < M5.length; i++) {
+    m = M5[i]; k = 0;
+    for (b = 0; b < NB; b++) if (m & (1 << b)) _h5[k++] = ids[b];
+    key = eval5(_h5); K5[m] = key; V5[m] = Math.floor(key / 4); CAT5[m] = keyCat(key);
+  }
+  for (i = 0; i < M3.length; i++) {
+    m = M3[i]; k = 0; var jj = 0;
+    for (b = 0; b < NB; b++) if (m & (1 << b)) { _h3[k++] = ids[b]; if (ids[b] >= 52) jj++; }
+    key = eval3(_h3); K3[m] = key; V3[m] = Math.floor(key / 4); J3[m] = jj;
+  }
+}
+
+var TABLES = null;
+function lowerBound(a, x) { var lo = 0, hi = a.length; while (lo < hi) { var mid = (lo + hi) >> 1; if (a[mid] < x) lo = mid + 1; else hi = mid; } return lo; }
+function upperBound(a, x) { var lo = 0, hi = a.length; while (lo < hi) { var mid = (lo + hi) >> 1; if (a[mid] <= x) lo = mid + 1; else hi = mid; } return lo; }
+function rowScore(t, key, roy) {
+  var n = t.k.length, lb = lowerBound(t.k, key), ub = upperBound(t.k, key);
+  return (lb / n) * (1 + roy) - (n - ub) / n - t.rs[ub];
+}
+function buildTable(sortedKeys, roys) {
+  var n = sortedKeys.length, rs = new Float64Array(n + 1);
+  for (var i = n - 1; i >= 0; i--) rs[i] = rs[i + 1] + roys[i] / n;
+  return { k: Int32Array.from(sortedKeys), rs: rs };
+}
+function computeScores(crude) {
+  var i, m;
+  for (i = 0; i < M5.length; i++) {
+    m = M5[i];
+    if (crude) { SM[m] = K5[m] / 4e7; SB[m] = K5[m] / 8e7; }
+    else { SM[m] = rowScore(TABLES.mid, K5[m], royMid(K5[m])); SB[m] = rowScore(TABLES.back, K5[m], royBack(K5[m])); }
+  }
+  for (i = 0; i < M3.length; i++) {
+    m = M3[i];
+    SF[m] = crude ? K3[m] / 2.6e7 + (J3[m] >= 2 ? 1 : 0) : rowScore(TABLES.front, K3[m], royFront(K3[m], J3[m]));
+  }
+}
+
+// Prefix maxima of row scores ordered by strength, for branch-and-bound
+var _o5 = new Int32Array(2002), _vs5 = new Int32Array(2002), _pm5 = new Float64Array(2002);
+var _o3 = new Int32Array(364), _vs3 = new Int32Array(364), _pm3 = new Float64Array(364);
+var _ub = new Float64Array(2002), _bo = new Int32Array(2002);
+function prepBounds() {
+  var i, a5 = M5.slice().sort(function (x, y) { return V5[x] - V5[y]; });
+  for (i = 0; i < a5.length; i++) { _o5[i] = a5[i]; _vs5[i] = V5[a5[i]]; _pm5[i] = Math.max(i ? _pm5[i - 1] : -1e9, SM[a5[i]]); }
+  var a3 = M3.slice().sort(function (x, y) { return V3[x] - V3[y]; });
+  for (i = 0; i < a3.length; i++) { _o3[i] = a3[i]; _vs3[i] = V3[a3[i]]; _pm3[i] = Math.max(i ? _pm3[i - 1] : -1e9, SF[a3[i]]); }
+}
+function maxLE(vs, pm, v) { var lo = 0, hi = vs.length; while (lo < hi) { var mid = (lo + hi) >> 1; if (vs[mid] <= v) lo = mid + 1; else hi = mid; } return lo ? pm[lo - 1] : -1e9; }
+
+var _pos = new Int32Array(9);
+// Find best arrangement (thr undefined) or collect all with score >= thr into collect (flat s,B,M,F)
+function enumerate(thr, collect) {
+  prepBounds();
+  var i, n5 = M5.length;
+  for (i = 0; i < n5; i++) { var B0 = M5[i]; _ub[i] = SB[B0] + maxLE(_vs5, _pm5, V5[B0]) + maxLE(_vs3, _pm3, V5[B0]); }
+  var order = Array.prototype.slice.call(_ub.subarray(0, n5)).map(function (u, idx) { return idx; });
+  order.sort(function (a, b) { return _ub[b] - _ub[a]; });
+  var best = -1e9, bb = 0, bm = 0, bf = 0, collecting = !!collect;
+  for (var oi = 0; oi < n5; oi++) {
+    var bi = order[oi], cut = collecting ? thr : best;
+    if (_ub[bi] < cut) break;
+    var B = M5[bi], vb = V5[B], rem = FULL ^ B, k = 0, sb = SB[B];
+    for (var b = 0; b < NB; b++) if (rem & (1 << b)) _pos[k++] = b;
+    for (var c = 0; c < C95.length; c++) {
+      var p = C95[c];
+      var M = (1 << _pos[p[0]]) | (1 << _pos[p[1]]) | (1 << _pos[p[2]]) | (1 << _pos[p[3]]) | (1 << _pos[p[4]]);
+      var vm = V5[M];
+      if (vm > vb) continue;
+      var sbm = sb + SM[M];
+      cut = collecting ? thr : best;
+      if (sbm + maxLE(_vs3, _pm3, vm) < cut) continue;
+      var rem2 = rem ^ M, catOk = CAT5[M] >= 4;
+      for (var d = 0; d < NB; d++) {
+        if (!(rem2 & (1 << d))) continue;
+        var F = rem2 ^ (1 << d);
+        if (V3[F] > vm) continue;
+        if (J3[F] >= 2 && !catOk) continue; // 2+ jokers in front need a straight or better in the middle
+        var s = sbm + SF[F];
+        if (collecting) { if (s >= thr) collect.push(s, B, M, F); }
+        else if (s > best) { best = s; bb = B; bm = M; bf = F; }
+      }
+    }
+  }
+  return best > -1e9 ? { s: best, b: bb, m: bm, f: bf } : null;
+}
+
+function setHand(ids, crude) {
+  computeSubsets(ids); computeScores(crude);
+  var r = enumerate();
+  if (!r) return null;
+  var fk = K3[r.f], mk = K5[r.m], bk = K5[r.b];
+  return { fk: fk, mk: mk, bk: bk, fr: royFront(fk, J3[r.f]), mr: royMid(mk), br: royBack(bk), b: r.b, m: r.m, f: r.f };
+}
+
+function rk(r) { return RANK_CH[r]; }
+function describe(key) {
+  var c = keyCat(key), s = keySlots(key), su = SUIT_CH[key % 4];
+  switch (c) {
+    case 9: return 'Five ' + RANK_NAME[s[0]];
+    case 8: return 'Straight flush, ' + (s[0] === 10 ? 'A-K-Q-J-10' : s[0] === 9 ? 'A-2-3-4-5' : rk(s[0] + 5) + '-high') + ' ' + su;
+    case 7: return 'Four ' + RANK_NAME[s[0]] + (s[1] ? ', ' + rk(s[1]) + ' kicker' : '');
+    case 6: return RANK_NAME[s[0]] + ' full of ' + RANK_NAME[s[1]];
+    case 5: return 'Flush ' + s.map(rk).join('-') + ' ' + su;
+    case 4: return 'Straight, ' + (s[0] === 10 ? 'A-K-Q-J-10' : s[0] === 9 ? 'A-2-3-4-5' : rk(s[0] + 5) + '-high');
+    case 3: return 'Three ' + RANK_NAME[s[0]];
+    case 2: return 'Two pair, ' + RANK_NAME[s[0]] + ' & ' + RANK_NAME[s[1]];
+    case 1: return 'Pair of ' + RANK_NAME[s[0]] + ', ' + rk(s[1]) + ' kicker';
+    default: return rk(s[0]) + '-high';
+  }
+}
+
+if (typeof module !== 'undefined') module.exports = {
+  eval5, eval3, keyCat, keyVal, royFront, royMid, royBack, describe, computeSubsets, computeScores, enumerate, setHand,
+  buildTable, setTables: function (t) { TABLES = t; }, K5, K3, J3, V5, V3, CAT5, M5, M3
+};
+
+// ===== 14-card Monte Carlo solver (no face-up cards, no naturals) =====
+function cmpKey(a, b) { return a > b ? 1 : a < b ? -1 : 0; }
+function shapeOf(k) { return Math.floor(k / 262144); } // category + primary rank
+
+function solveHand(opts, onProgress) {
+  var hand = opts.hand, sims = opts.sims || 600, K = opts.K || 150;
+  var cands = [], i, j;
+
+  computeSubsets(hand); computeScores();
+  var top = enumerate();
+  if (!top) return { error: 'No legal setup found for this hand.' };
+  var col = [], margin = 1.5;
+  while (true) {
+    col.length = 0; enumerate(top.s - margin, col);
+    if (col.length / 4 >= 600 || margin > 12) break;
+    margin *= 2;
+  }
+  var n = col.length / 4, order = new Array(n);
+  for (i = 0; i < n; i++) order[i] = i;
+  order.sort(function (a, b) { return col[b * 4] - col[a * 4]; });
+  var seen = {}, shape = {};
+  for (i = 0; i < n && cands.length < K; i++) {
+    var o = order[i] * 4, B = col[o + 1], M = col[o + 2], F = col[o + 3];
+    var fk = K3[F], mk = K5[M], bk = K5[B], sig = fk + ',' + mk + ',' + bk;
+    if (seen[sig]) continue;
+    var sh = shapeOf(fk) + '|' + shapeOf(mk) + '|' + shapeOf(bk);
+    if ((shape[sh] || 0) >= 4) continue;
+    shape[sh] = (shape[sh] || 0) + 1; seen[sig] = 1;
+    var D = FULL ^ B ^ M ^ F, dcard = -1;
+    for (var bt = 0; bt < NB; bt++) if (D & (1 << bt)) dcard = hand[bt];
+    cands.push({
+      B: B, M: M, F: F, fk: fk, mk: mk, bk: bk, discard: dcard,
+      fr: royFront(fk, J3[F]), mr: royMid(mk), br: royBack(bk),
+      sF: 0, sM: 0, sB: 0, sT: 0, sT2: 0, wF: 0, wM: 0, wB: 0, scoop: 0, scooped: 0, scoopAll: 0, oppScoopAll: 0, games: 0
+    });
+  }
+
+  var used = {}; hand.forEach(function (c) { used[c] = 1; });
+  var pool = []; for (i = 0; i < 56; i++) if (!used[i]) pool.push(i);
+  var done = 0, opp = [null, null, null], oppScoopOthers = [false, false, false];
+  var rf = [0, 0, 0], rm = [0, 0, 0], rb = [0, 0, 0], rx = [0, 0, 0];
+  var chunk = Math.max(25, Math.floor(sims / 20));
+
+  for (var sim = 0; sim < sims; sim++) {
+    for (i = pool.length - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); var t = pool[i]; pool[i] = pool[j]; pool[j] = t; }
+    for (var p = 0; p < 3; p++) opp[p] = setHand(pool.slice(p * 14, p * 14 + 14));
+    done++;
+    var allPlay = opp[0] && opp[1] && opp[2];
+    for (p = 0; p < 3; p++) {
+      oppScoopOthers[p] = false;
+      if (!allPlay) continue;
+      var okp = true;
+      for (var q = 0; q < 3 && okp; q++) {
+        if (q === p) continue;
+        if (!(opp[p].fk > opp[q].fk && opp[p].mk > opp[q].mk && opp[p].bk > opp[q].bk)) okp = false;
+      }
+      oppScoopOthers[p] = okp;
+    }
+    for (var c = 0; c < cands.length; c++) {
+      var cd = cands[c], tf = 0, tm = 0, tb = 0, nScoop = 0;
+      for (p = 0; p < 3; p++) {
+        var op = opp[p]; rf[p] = rm[p] = rb[p] = 0; rx[p] = 0; if (!op) continue;
+        var a = cmpKey(cd.fk, op.fk), b = cmpKey(cd.mk, op.mk), d = cmpKey(cd.bk, op.bk);
+        rf[p] = a > 0 ? 1 + cd.fr : a < 0 ? -(1 + op.fr) : 0;
+        rm[p] = b > 0 ? 1 + cd.mr : b < 0 ? -(1 + op.mr) : 0;
+        rb[p] = d > 0 ? 1 + cd.br : d < 0 ? -(1 + op.br) : 0;
+        var x = 1;
+        if (a > 0 && b > 0 && d > 0) { x = 2; cd.scoop++; nScoop++; }
+        else if (a < 0 && b < 0 && d < 0) { x = oppScoopOthers[p] ? 4 : 2; cd.scooped++; if (oppScoopOthers[p]) cd.oppScoopAll++; }
+        if (a > 0) cd.wF++; if (b > 0) cd.wM++; if (d > 0) cd.wB++;
+        cd.games++;
+        rx[p] = x;
+      }
+      if (nScoop === 3) { cd.scoopAll++; rx[0] *= 2; rx[1] *= 2; rx[2] *= 2; }
+      for (p = 0; p < 3; p++) { tf += rf[p] * rx[p]; tm += rm[p] * rx[p]; tb += rb[p] * rx[p]; }
+      var tot = tf + tm + tb;
+      cd.sF += tf; cd.sM += tm; cd.sB += tb; cd.sT += tot; cd.sT2 += tot * tot;
+    }
+    if (onProgress && (done % chunk === 0) && done < sims) onProgress(done, sims, summarize());
+  }
+  return summarize();
+
+  function summarize() {
+    var N = done || 1;
+    var res = cands.map(function (cd) {
+      var m = cd.sT / N, vr = Math.max(0, cd.sT2 / N - m * m), g = cd.games || 1;
+      return {
+        rows: { F: maskCards(cd.F), M: maskCards(cd.M), B: maskCards(cd.B) }, discard: cd.discard,
+        desc: { F: describe(cd.fk), M: describe(cd.mk), B: describe(cd.bk) },
+        roy: { F: cd.fr, M: cd.mr, B: cd.br },
+        ev: { F: cd.sF / N, M: cd.sM / N, B: cd.sB / N, total: m },
+        se: Math.sqrt(vr / N),
+        win: { F: cd.wF / g, M: cd.wM / g, B: cd.wB / g },
+        scoop: cd.scoop / g, scooped: cd.scooped / g, scoopAll: cd.scoopAll / N, oppScoopAll: cd.oppScoopAll / N
+      };
+    });
+    res.sort(function (a, b) { return b.ev.total - a.ev.total; });
+    return { sims: done, total: sims, results: res.slice(0, 12), candidates: cands.length };
+  }
+  function maskCards(m) { var out = []; for (var b = 0; b < NB; b++) if (m & (1 << b)) out.push(hand[b]); return out; }
+}
+</script>
+<script type="text/plain" id="tables-src">{"front":{"ks":[1641473,1658880,1918978,1921025,1936386,1937410,1938434,2182144,2197504,2199553,2200578,2214913,2215939,2216963,2217985,2427905,2444291,2459649,2461697,2462722,2478080,2479105,2480129,2492416,2495488,2496512,2497537,2497538,2706432,2707458,2723841,2724866,2739203,2741251,2742274,2754560,2756609,2757633,2757635,2758658,2759681,2770945,2772994,2774018,2775041,2775043,2776064,2776067,2777089,2952192,2983936,2985985,2987010,2987011,3002369,3003393,3003395,3004418,3018752,3019777,3020800,3020802,3021824,3021826,3021827,3035136,3036160,3037184,3037187,3038209,3038210,3039232,3039233,3039235,3050497,3051522,3052546,3053569,3054592,3054594,3054595,3055616,3055617,3055618,3055619,3056641,3056642,3056643,3056643,3214338,3230723,3231746,3247106,3248129,3249153,3262465,3264514,3265536,3266560,3266561,3266563,3279873,3281921,3281923,3282945,3282946,3283968,3283969,3283971,3283971,3297280,3298304,3298306,3299329,3299330,3300352,3300354,3301376,3301377,3301378,3301379,3312643,3313666,3314690,3315712,3315714,3316736,3316737,3316738,3316739,3317760,3317761,3317762,3317763,3318784,3318784,3318785,3318786,3318787,3329024,3330050,3331072,3331074,3332097,3332099,3333120,3333121,3333123,3334144,3334145,3334146,3334147,3335168,3335168,3335169,3335170,3335170,3335171,3335171,3336192,3336193,3336193,3336193,3336194,3336194,3336195,3336195,3476482,3493888,3493889,3508225,3510272,3510274,3511296,3511298,3525632,3526657,3527680,3527682,3528704,3528706,3540995,3543043,3544064,3544066,3545088,3545090,3546112,3546114,3546115,3559424,3559427,3560449,3560451,3561473,3561475,3562496,3562497,3562498,3562499,3563521,3563521,3563522,3573762,3575808,3575811,3576833,3576835,3577856,3577858,3577859,3578880,3578882,3578883,3579904,3579904,3579905,3579906,3579906,3579907,3580928,3580928,3580929,3580930,3580930,3580931,3580931,3591170,3592193,3593216,3593218,3594240,3594241,3594243,3595264,3595265,3595266,3595266,3595267,3596288,3596288,3596289,3596290,3596291,3596291,3597312,3597312,3597313,3597313,3597314,3597314,3597314,3597315,3598336,3598336,3598336,3598337,3598337,3598337,3598338,3598338,3598338,3598339,3598339,3598339,3607554,3608576,3608578,3609600,3609601,3609602,3610624,3610625,3610626,3610626,3610627,3611648,3611649,3611650,3611651,3611651,3612672,3612672,3612673,3612673,3612674,3612674,3612675,3613696,3613696,3613696,3613696,3613697,3613697,3613697,3613698,3613698,3613699,3613699,3613699,3614720,3614720,3614720,3614720,3614721,3614721,3614721,3614721,3614722,3614722,3614722,3614722,3614723,3614723,3614723,3614723,3615744,3615744,3615744,3615744,3615744,3615745,3615745,3615745,3615745,3615745,3615746,3615746,3615746,3615746,3615747,3615747,3615747,3615747,3615747,3615747,3738625,3755009,3756032,3771393,3772418,3773441,3773443,3788800,3788802,3789825,3789826,3790848,3790849,3790851,3804162,3805187,3806209,3806211,3807233,3807233,3807235,3808256,3808257,3808259,3819523,3821569,3822592,3822594,3823616,3823617,3823618,3824640,3824641,3824642,3825664,3825665,3825665,3825666,3825667,3836928,3837953,3837955,3838977,3838979,3840001,3840002,3840003,3841024,3841024,3841025,3841026,3841027,3842048,3842049,3842049,3842050,3842050,3842051,3843072,3843072,3843073,3843073,3843074,3843074,3843075,3843075,3843075,3854337,3854339,3855361,3855362,3855363,3856384,3856386,3856387,3857408,3857409,3857409,3857410,3857411,3857411,3858432,3858432,3858433,3858433,3858434,3858434,3858435,3858435,3859456,3859456,3859457,3859457,3859457,3859458,3859458,3859459,3859459,3859459,3860480,3860480,3860480,3860481,3860481,3860481,3860481,3860482,3860482,3860482,3860483,3860483,3860483,3860483,3860483,3869698,3870720,3870722,3871744,3871745,3871747,3872768,3872769,3872770,3873792,3873792,3873793,3873794,3873795,3873795,3874816,3874816,3874817,3874817,3874817,3874818,3874818,3874819,3875840,3875840,3875840,3875840,3875841,3875841,3875841,3875842,3875842,3875842,3875842,3875843,3875843,3876864,3876864,3876864,3876864,3876864,3876864,3876865,3876865,3876865,3876865,3876866,3876866,3876866,3876866,3876866,3876866,3876867,3876867,3876867,3876867,3876867,3877888,3877888,3877888,3877888,3877888,3877888,3877888,3877888,3877888,3877889,3877889,3877889,3877889,3877889,3877889,3877890,3877890,3877890,3877890,3877890,3877890,3877890,3877890,3877890,3877891,3877891,3877891,3877891,3877891,3877891,3877891,3877891,3886082,3887105,3887106,3887107,3888128,3888130,3888131,3889152,3889152,3889153,3889154,3889155,3890176,3890176,3890177,3890178,3890178,3890179,3890179,3891200,3891200,3891201,3891201,3891202,3891202,3891203,3891203,3892224,3892224,3892224,3892224,3892225,3892225,3892225,3892226,3892226,3892226,3892227,3892227,3892227,3892227,3893248,3893248,3893248,3893248,3893248,3893249,3893249,3893249,3893249,3893249,3893249,3893249,3893250,3893250,3893250,3893250,3893250,3893251,3893251,3893251,3893251,3893251,3894272,3894272,3894272,3894272,3894272,3894272,3894272,3894272,3894273,3894273,3894273,3894273,3894273,3894273,3894273,3894273,3894273,3894273,3894273,3894274,3894274,3894274,3894274,3894274,3894274,3894274,3894275,3894275,3894275,3894275,3894275,3894275,3894275,3894275,3895296,3895296,3895296,3895296,3895296,3895296,3895296,3895296,3895296,3895296,3895296,3895296,3895296,3895297,3895297,3895297,3895297,3895297,3895297,3895297,3895297,3895297,3895297,3895297,3895297,3895298,3895298,3895298,3895298,3895298,3895298,3895298,3895298,3895298,3895298,3895298,3895298,3895299,3895299,3895299,3895299,3895299,3895299,3895299,3895299,3895299,3895299,3895299,3895299,3895299,3895299,4784131,4800514,4816898,4816899,4833282,4833283,4849665,4849667,4849667,4866050,4866051,4882434,4882435,4882435,4898817,4898818,4898819,4898819,4915201,4915202,4915202,4915203,4915203,4915203,4931585,4931586,4931586,4931586,4931586,4931587,4931587,4931587,4947970,4947971,5013507,5062658,5079041,5079042,5095426,5095427,5111809,5111810,5111811,5128193,5128194,5128195,5144578,5144578,5144579,5160961,5160962,5160963,5160963,5177345,5177346,5177346,5177347,5177347,5177347,5177347,5193729,5193729,5193730,5193730,5193731,5193731,5193731,5210113,5210114,5210115,5292035,5324802,5324803,5341187,5357570,5357571,5373954,5373955,5373955,5390337,5390339,5390339,5406721,5406722,5406723,5406723,5423106,5423107,5423107,5439489,5439490,5439491,5439491,5439491,5455873,5455874,5455874,5455875,5455875,5455875,5472258,5472259,5472259,5554179,5570562,5603330,5619713,5619715,5619715,5636098,5636099,5652481,5652482,5652483,5652483,5668866,5668867,5668867,5685250,5685250,5685251,5685251,5685251,5701634,5701634,5701635,5701635,5718018,5718018,5718019,5718019,5718019,5734401,5734402,5734403,5734403,5816321,5816323,5832706,5849090,5849090,5849091,5881858,5881859,5881859,5898241,5898242,5898243,5898243,5914625,5914626,5914627,5914627,5931009,5931010,5931010,5931011,5931011,5931011,5947393,5947394,5947394,5947395,5947395,5947395,5963777,5963778,5963779,5963779,5963779,5963779,5980161,5980162,5980162,5980163,5980163,5980163,5980163,5996545,5996546,5996547,5996547,5996547,6062082,6094850,6111233,6111234,6111235,6127617,6127618,6127619,6127619,6127619,6160385,6160386,6160386,6160387,6160387,6176769,6176770,6176770,6176771,6176771,6176771,6193153,6193154,6193155,6193155,6193155,6193155,6209537,6209537,6209538,6209538,6209538,6209539,6209539,6209539,6209539,6225921,6225921,6225922,6225922,6225922,6225923,6225923,6225923,6225923,6225923,6242305,6242306,6242306,6242306,6242306,6242307,6242307,6242307,6242307,6242307,6258689,6258690,6258690,6258691,6258691,6258691,6258691,6324225,6340610,6356993,6356995,6373377,6373378,6373379,6389761,6389762,6389763,6406145,6406145,6406146,6406146,6406147,6406147,6406147,6438913,6438914,6438914,6438915,6438915,6438915,6455297,6455298,6455298,6455298,6455299,6455299,6455299,6471681,6471682,6471682,6471683,6471683,6471683,6471683,6488065,6488065,6488066,6488066,6488067,6488067,6488067,6488067,6488067,6488067,6504449,6504450,6504450,6504450,6504450,6504451,6504451,6504451,6504451,6504451,6520833,6520833,6520834,6520834,6520834,6520835,6520835,6520835,6520835,6520835,6586370,6602755,6619139,6635521,6635523,6651906,6651907,6651907,6668289,6668290,6668290,6668291,6668291,6668291,6684673,6684673,6684674,6684674,6684674,6684675,6684675,6684675,6684675,6717441,6717442,6717443,6717443,6717443,6733825,6733826,6733826,6733826,6733827,6733827,6733827,6733827,6750209,6750210,6750210,6750210,6750210,6750211,6750211,6750211,6766593,6766593,6766594,6766594,6766594,6766595,6766595,6766595,6766595,6766595,6766595,6766595,6782977,6782977,6782978,6782978,6782978,6782979,6782979,6782979,6782979,6782979,6864898,6881282,6881283,6897666,6914049,6914051,6914051,6930434,6930434,6930435,6930435,6946817,6946818,6946819,6946819,6946819,6963201,6963201,6963202,6963202,6963203,6963203,6963203,6963203,6963203,6995969,6995970,6995970,6995970,6995971,6995971,6995971,6995971,7012353,7012353,7012354,7012354,7012355,7012355,7012355,7012355,7012355,7028737,7028737,7028738,7028738,7028738,7028738,7028739,7028739,7028739,7028739,7028739,7045121,7045121,7045121,7045122,7045122,7045122,7045122,7045122,7045122,7045123,7045123,7045123,7045123,7045123,7045123,7045123,7045123,7127042,7143425,7143427,7159810,7159811,7176193,7176194,7176195,7176195,7192577,7192578,7192578,7192579,7192579,7208961,7208962,7208962,7208963,7208963,7208963,7225345,7225346,7225346,7225346,7225347,7225347,7225347,7225347,7225347,7241729,7241729,7241730,7241730,7241730,7241731,7241731,7241731,7241731,7241731,7241731,7274497,7274498,7274498,7274498,7274499,7274499,7274499,7274499,7274499,7274499,7290881,7290881,7290882,7290882,7290882,7290882,7290882,7290883,7290883,7290883,7290883,7290883,7290883,7290883,7290883,7290883,7290883,7307265,7307265,7307265,7307266,7307266,7307266,7307266,7307266,7307266,7307267,7307267,7307267,7307267,7307267,7307267,7307267,7307267,7307267,7307267,7307267,7389187,7405570,7405571,7421953,7421955,7421955,7438337,7438338,7438339,7438339,7454721,7454722,7454722,7454723,7454723,7454723,7454723,7471105,7471106,7471106,7471106,7471107,7471107,7471107,7471107,7487489,7487489,7487490,7487490,7487490,7487491,7487491,7487491,7487491,7487491,7487491,7503873,7503873,7503874,7503874,7503874,7503874,7503875,7503875,7503875,7503875,7503875,7503875,7503875,7520257,7520257,7520257,7520258,7520258,7520258,7520258,7520258,7520258,7520258,7520259,7520259,7520259,7520259,7520259,7520259,7520259,7520259,7520259,7520259,7520259,7520259,7520259,7553025,7553025,7553025,7553025,7553026,7553026,7553026,7553026,7553026,7553026,7553026,7553026,7553026,7553027,7553027,7553027,7553027,7553027,7553027,7553027,7553027,7553027,7553027,7553027,7553027,7553027,7553027,7553027,7569409,7569409,7569409,7569409,7569409,7569410,7569410,7569410,7569410,7569410,7569410,7569410,7569410,7569410,7569410,7569410,7569410,7569411,7569411,7569411,7569411,7569411,7569411,7569411,7569411,7569411,7569411,7569411,7569411,7569411,7569411,7569411,7569411,7634947,7651331,7667714,7667714,7667715,7684097,7684098,7684099,7684099,7700481,7700482,7700482,7700483,7700483,7700483,7716865,7716866,7716866,7716867,7716867,7716867,7716867,7733249,7733249,7733250,7733250,7733250,7733251,7733251,7733251,7733251,7733251,7749633,7749633,7749634,7749634,7749634,7749634,7749635,7749635,7749635,7749635,7749635,7749635,7749635,7749635,7766017,7766017,7766017,7766017,7766018,7766018,7766018,7766018,7766018,7766018,7766019,7766019,7766019,7766019,7766019,7766019,7766019,7766019,7766019,7766019,7766019,7766019,7782401,7782401,7782401,7782401,7782402,7782402,7782402,7782402,7782402,7782402,7782402,7782402,7782403,7782403,7782403,7782403,7782403,7782403,7782403,7782403,7782403,7782403,7782403,7782403,7782403,7782403,7782403,7782403,7782403,7782403,7798785,7798785,7798785,7798785,7798785,7798785,7798785,7798786,7798786,7798786,7798786,7798786,7798786,7798786,7798786,7798786,7798786,7798786,7798786,7798786,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7798787,7831553,7831553,7831553,7831553,7831553,7831553,7831553,7831553,7831554,7831554,7831554,7831554,7831554,7831554,7831554,7831554,7831554,7831554,7831554,7831554,7831554,7831554,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7831555,7913474,7913475,7929858,7929859,7929859,7929859,7946242,7946242,7946242,7946243,7946243,7946243,7962626,7962626,7962626,7962627,7962627,7962627,7979009,7979009,7979010,7979010,7979010,7979011,7979011,7979011,7979011,7979011,7979011,7995393,7995393,7995394,7995394,7995394,7995395,7995395,7995395,7995395,7995395,7995395,8011777,8011777,8011778,8011778,8011778,8011778,8011778,8011778,8011779,8011779,8011779,8011779,8011779,8011779,8011779,8011779,8028161,8028161,8028161,8028161,8028162,8028162,8028162,8028162,8028162,8028162,8028163,8028163,8028163,8028163,8028163,8028163,8028163,8028163,8028163,8028163,8028163,8028163,8028163,8028163,8028163,8044545,8044545,8044545,8044545,8044546,8044546,8044546,8044546,8044546,8044546,8044546,8044546,8044546,8044546,8044547,8044547,8044547,8044547,8044547,8044547,8044547,8044547,8044547,8044547,8044547,8044547,8044547,8044547,8044547,8044547,8044547,8044547,8044547,8044547,8044547,8044547,8060929,8060929,8060929,8060929,8060929,8060929,8060929,8060929,8060930,8060930,8060930,8060930,8060930,8060930,8060930,8060930,8060930,8060930,8060930,8060930,8060930,8060930,8060930,8060930,8060930,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8060931,8077313,8077313,8077313,8077313,8077313,8077313,8077313,8077313,8077313,8077313,8077313,8077314,8077314,8077314,8077314,8077314,8077314,8077314,8077314,8077314,8077314,8077314,8077314,8077314,8077314,8077314,8077314,8077314,8077314,8077314,8077314,8077314,8077314,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,8077315,13107202,13107202,13107203,13107203,13107203,13107203,13107203,13107203,13107203,13369346,13369347,13369347,13369347,13369347,13369347,13369347,13369347,13369347,13369347,13631491,13631491,13631491,13631491,13631491,13631491,13631491,13893634,13893635,13893635,13893635,13893635,13893635,13893635,13893635,14155778,14155779,14155779,14155779,14155779,14155779,14155779,14155779,14417922,14417923,14417923,14417923,14417923,14417923,14417923,14417923,14417923,14417923,14417923,14680066,14680067,14680067,14680067,14680067,14680067,14680067,14680067,14680067,14680067,14680067,14680067,14680067,14942211,14942211,14942211,14942211,14942211,14942211,14942211,14942211,14942211,14942211,15204354,15204355,15204355,15204355,15204355,15204355,15204355,15204355,15204355,15204355,15204355,15204355,15204355,15204355,15466498,15466499,15466499,15466499,15466499,15466499,15466499,15466499,15466499,15466499,15466499,15466499,15466499,15466499,15466499,15466499,15466499,15466499,15728643,15728643,15728643,15728643,15728643,15728643,15728643,15728643,15728643,15728643,15728643,15728643,15728643,15728643,15728643,15728643,15728643,15728643,15728643,15728643,15728643,15728643,15990786,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,15990787,16252930,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931,16252931],"rs":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,19,2,2,2,2,2,2,2,2,2,2,19,2,19,2,2,19,2,2,2,2,19,2,2,19,19,2,2,2,2,2,2,19,2,19,2,2,2,19,2,2,19,2,2,2,2,19,2,2,19,19,2,2,2,2,2,2,19,2,19,2,2,19,19,19,2,19,19,19,19,19,2,19,19,2,19,2,19,19,2,19,19,19,19,2,2,19,19,19,19,19,19,19,2,19,2,2,19,19,2,19,19,19,19,2,19,19,19,19,19,2,19,2,19,19,2,19,19,2,2,19,19,19,19,2,19,19,19,19,2,19,19,2,2,19,19,19,19,2,2,2,19,19,19,19,19,2,2,2,2,2,2,29,29,19,19,2,29,19,29,19,2,19,2,2,19,19,19,19,19,2,19,2,19,19,2,19,19,2,29,19,2,2,19,19,2,2,29,19,19,2]},"mid":{"ks":[3527948,3529043,3546505,3791119,3791184,3807567,3808588,3808649,3808659,3824910,3825042,3826067,3857804,4839683,4839747,4856003,4856131,4857155,4857219,4872515,4873601,4874625,4874691,4891905,4907331,5101825,5118211,5119107,5119299,5119362,5135491,5135745,5136771,5151874,5153153,5154306,5170627,5362883,5364034,5380291,5381250,5381506,5397698,5398659,5398915,5414019,5415361,5416451,5431683,5433475,5451393,5626050,5642433,5643457,5643651,5659842,5660035,5661058,5661123,5677442,5678466,5678594,5693889,5694978,5708033,5713539,5886145,5887234,5903491,5903619,5905667,5920002,5922051,5922115,5923011,5923139,5938369,5939393,5939522,5940481,5940739,5955843,5956867,5957826,5958211,5975170,6131907,6132993,6165633,6165763,6166786,6166851,6182146,6183170,6185154,6185282,6198402,6201601,6202626,6202755,6215811,6217923,6218947,6219267,6220289,6234370,6236675,6377666,6395075,6410371,6411459,6412483,6412611,6444227,6444291,6445315,6446273,6446403,6459587,6461633,6462659,6462851,6464835,6476995,6478083,6481090,6481345,6482179,6482497,6495555,6498691,6499715,6639811,6657219,6657283,6673537,6673667,6674689,6674755,6689986,6690051,6691010,6691075,6692033,6692163,6722754,6723907,6724995,6725955,6740226,6741315,6742275,6744258,6755459,6757635,6760961,6772866,6917250,6919362,6919427,6934659,6935747,6936707,6950018,6952131,6952195,6953219,6954179,6966402,6969474,6970498,6970691,6971650,6971843,7003394,7004483,7005443,7018627,7021889,7038402,7180417,7181442,7181571,7197827,7197955,7198978,7199042,7214275,7215363,7215427,7216451,7229634,7230723,7231747,7232706,7232835,7233666,7233922,7248065,7249154,7250178,7251139,7281795,7282946,7284035,7285123,7301571,7442562,7443714,7457923,7460098,7461058,7461123,7461187,7476481,7477506,7478402,7478531,7478658,7492739,7492867,7493891,7494914,7494979,7496003,7508099,7510147,7511171,7512322,7513346,7524482,7526721,7527810,7528835,7529922,7531010,7562434,7563842,7704705,7705795,7705859,7722113,7722242,7723139,7723266,7723330,7737538,7738626,7739651,7740611,7740739,7740803,7754947,7755971,7756994,7757123,7758018,7758147,7758275,7771395,7773441,7773507,7774467,7774659,7775746,7788738,7789890,7790787,7790915,7791873,7793025,7804034,7805250,7806211,7806338,7807234,7807299,7807363,7808195,7808387,7809537,7810562,7967937,7968003,7984385,7985409,7985411,7998594,8000770,8001794,8002689,8002819,8002946,8016065,8017155,8018115,8018242,8019139,8019267,8020099,8020289,8020354,8020419,8034435,8034627,8035649,8036610,8036738,8037762,8048834,8050945,8051971,8052995,8053891,8055042,8055362,8067267,8068355,8069379,8069571,8070531,8071361,8071683,8081601,8083715,8084801,8084867,8085826,8086979,8087939,9212931,9213955,9214977,9214978,9214979,9216002,9216003,9217026,9218050,9219073,9220097,9221122,9475074,9476098,9477122,9477123,9478146,9478147,9479170,9480194,9480195,9481218,9482243,9488387,9492483,9493506,9493507,9494530,9494531,9495554,9496578,9497602,9497603,9498627,9738241,9739265,9739267,9740290,9741314,9742338,9743362,9744386,9750531,9754627,9755650,9756673,9756675,9757697,9757699,9758722,9759746,9760771,9766914,9767938,9771010,9772035,9773058,9774081,9774082,9775105,9775107,9776131,9776131,9778179,9998339,9999363,10001410,10001411,10002435,10004481,10004483,10012673,10015745,10015746,10017793,10017795,10018819,10019843,10020867,10021890,10022914,10029059,10030083,10032131,10034178,10035201,10035203,10036226,10036227,10037250,10038273,10039298,10040323,10046467,10047489,10047491,10050563,10051587,10052609,10052611,10052611,10053635,10053635,10054659,10055683,10260482,10261506,10262529,10262531,10264579,10265602,10266626,10267650,10276867,10277891,10278914,10278915,10281986,10283010,10284033,10285059,10292226,10294274,10295297,10297346,10297347,10298370,10298371,10299394,10300418,10301442,10307586,10308611,10309635,10311682,10311683,10313730,10314754,10314755,10315778,10316802,10317826,10323971,10324995,10326018,10327042,10327043,10330114,10330115,10331139,10332162,10332163,10333186,10334210,10335235,10523650,10523651,10524675,10525699,10527747,10529794,10539011,10540034,10540035,10541058,10542081,10542083,10544130,10545155,10547202,10554370,10556418,10557441,10557443,10558466,10558467,10560514,10560515,10561539,10563587,10569731,10571778,10573826,10574850,10574851,10576899,10577922,10577923,10578946,10579970,10586115,10588163,10589186,10589187,10591235,10593282,10593283,10594306,10594307,10595331,10596355,10604545,10604547,10605569,10605571,10606595,10609666,10609667,10610691,10611713,10611715,10612738,10783746,10785793,10785795,10786819,10787842,10788867,10791939,10799106,10801155,10802178,10803202,10803203,10804226,10804227,10805251,10807299,10808323,10809346,10816515,10818562,10818563,10819587,10820609,10820611,10820611,10821634,10823683,10824707,10831875,10833921,10833923,10835969,10835971,10836994,10836995,10838018,10838019,10840067,10842113,10848259,10850305,10851329,10851331,10853378,10853379,10854403,10856449,10856451,10857474,10859521,10864643,10866690,10866691,10867714,10867715,10868738,10868739,10870786,10870787,10872834,10873857,10873859,10875905,10882050,10883075,10884099,10885122,10885123,10886146,10886147,10889218,10890242,10891266,11046914,11047938,11047939,11048962,11049986,11049987,11051011,11052033,11054081,11055105,11063297,11064322,11064323,11065346,11065347,11066370,11066371,11067395,11068417,11070465,11071489,11078658,11080706,11080707,11081731,11082754,11082755,11083779,11084802,11086851,11088899,11095043,11096067,11098114,11098115,11099139,11100162,11100163,11101187,11103235,11110403,11112450,11112451,11113474,11115521,11115523,11116547,11117569,11117571,11119619,11127809,11127811,11128834,11129858,11130881,11130882,11130883,11132930,11132931,11133954,11133955,11136003,11143170,11144195,11145218,11146242,11146243,11147267,11148290,11148291,11150337,11150339,11152385,11152387,11153411,11160579,11161603,11162626,11162627,11163651,11164675,11164675,11165699,11168771,11169795,11309058,11310082,11310083,11311106,11311107,11312131,11313154,11314177,11314179,11317251,11325443,11326466,11326467,11327490,11327491,11328515,11329538,11330562,11330563,11331587,11334659,11340802,11340803,11343873,11343875,11343875,11344898,11344899,11345922,11346946,11347971,11357186,11358210,11358211,11360258,11361281,11361283,11362307,11363330,11364354,11372545,11373571,11374595,11375618,11375619,11377665,11377667,11378691,11378691,11379715,11380737,11382786,11389953,11390979,11392001,11392003,11393027,11393027,11395075,11396099,11397122,11399171,11406337,11407362,11408385,11408387,11409410,11409411,11410434,11412482,11412483,11413506,11421697,11423746,11424770,11425793,11425795,11426817,11427842,11429889,11439107,11441153,11441155,11442179,11443202,11443203,11444226,11445250,11448321,11571203,11572226,11572227,11573251,11574274,11574275,11575299,11576323,11578371,11587587,11588611,11589635,11590657,11590659,11591682,11592705,11593731,11602946,11602947,11604994,11606018,11607041,11607043,11608067,11609091,11611139,11619331,11620355,11622402,11622403,11623427,11624451,11625475,11627523,11635714,11636739,11637762,11639809,11639811,11641857,11642883,11652097,11653121,11653123,11654145,11655170,11655171,11657219,11658243,11660290,11668483,11669507,11670531,11671554,11671555,11672579,11674626,11675651,11678723,11685889,11685891,11686915,11687939,11688962,11688963,11689987,11692034,11700227,11702273,11704321,11705347,11706371,11707395,11716610,11718658,11720706,11721731,11722755,11723779,11834369,11834371,11835394,11836419,11838465,11847683,11849731,11850755,11851778,11852802,11853827,11856897,11865091,11867139,11868163,11870209,11871235,11881473,11882497,11882499,11885570,11886595,11896833,11897859,11898883,11901955,11905027,11915266,11916291,11917315,11920387,11931650,11933698,11934722,11937794,11947010,11948035,11950082,11951107,11952131,11963395,11966467,11969539,11981826,11984899,11998210,12001283,12095491,12096515,12098561,12109826,12112899,12114947,12129283,12130307,12142595,12144642,12146691,12161025,12162051,12179459,13210627,13228035,13242371,13245443,13261827,13278211,13293571,13313027,13472770,13489154,13490179,13506563,13521923,13523971,13551618,13577219,13716483,13751299,13767683,13782019,13797379,13814787,13833219,13874179,14010371,14014466,14044163,14060547,14076931,14108675,14240771,14290946,14306307,14322691,14340099,14393347,14502914,14520323,14553091,14570499,14584835,14603267,14624771,14764034,14781442,14796803,14833667,14851075,14881794,14915587,15028227,15059971,15079427,15124483,15158275,15304707,15322115,15341571,15390723,15426562,15535107,15568899,15587331,15619075,15635458,15779843,15831043,15863811,15884291,15919107,16041987,16092163,16125954,16175107,16228355,16372739,16407555,16451587,17039360,17039360,17039360,17039360,17039360,17039360,17039360,17039360,17039360,17039360,17039360,17039361,17039361,17039361,17039361,17039361,17039361,17039361,17039361,17039361,17039361,17039361,17039362,17039362,17039362,17039362,17039362,17039362,17039362,17039362,17039362,17039362,17039362,17039362,17039363,17039363,17039363,17039363,17039363,17039363,17039363,17039363,17039363,17039363,17039363,17039363,17039363,17039363,17301504,17301504,17301504,17301504,17301504,17301504,17301504,17301504,17301504,17301504,17301505,17301505,17301505,17301505,17301505,17301505,17301505,17301505,17301505,17301505,17301505,17301505,17301505,17301505,17301506,17301506,17301506,17301506,17301506,17301506,17301506,17301506,17301506,17301506,17301506,17301506,17301506,17301506,17301507,17301507,17301507,17301507,17301507,17301507,17301507,17301507,17301507,17301507,17301507,17301507,17301507,17301507,17301507,17301507,17301507,17301507,17301507,17563648,17563648,17563648,17563648,17563648,17563648,17563648,17563648,17563648,17563648,17563648,17563649,17563649,17563649,17563649,17563649,17563649,17563649,17563649,17563649,17563649,17563649,17563649,17563649,17563650,17563650,17563650,17563650,17563650,17563650,17563650,17563650,17563650,17563650,17563650,17563650,17563650,17563651,17563651,17563651,17563651,17563651,17563651,17563651,17563651,17563651,17563651,17563651,17563651,17563651,17563651,17563651,17563651,17563651,17563651,17825792,17825792,17825792,17825792,17825792,17825792,17825792,17825792,17825792,17825792,17825792,17825793,17825793,17825793,17825793,17825793,17825793,17825793,17825793,17825793,17825793,17825793,17825793,17825793,17825794,17825794,17825794,17825794,17825794,17825794,17825794,17825794,17825794,17825794,17825794,17825794,17825794,17825794,17825794,17825794,17825795,17825795,17825795,17825795,17825795,17825795,17825795,17825795,17825795,17825795,17825795,17825795,17825795,17825795,17825795,17825795,17825795,18087936,18087936,18087936,18087936,18087936,18087936,18087936,18087936,18087937,18087937,18087937,18087937,18087937,18087937,18087937,18087937,18087937,18087937,18087937,18087937,18087938,18087938,18087938,18087938,18087938,18087938,18087938,18087938,18087938,18087938,18087938,18087938,18087938,18087938,18087938,18087939,18087939,18087939,18087939,18087939,18087939,18087939,18087939,18087939,18087939,18087939,18087939,18087939,18087939,18087939,18087939,18087939,18087939,18350080,18350080,18350080,18350080,18350080,18350080,18350080,18350080,18350080,18350080,18350080,18350081,18350081,18350081,18350081,18350081,18350081,18350081,18350081,18350081,18350081,18350081,18350081,18350082,18350082,18350082,18350082,18350082,18350082,18350082,18350082,18350082,18350082,18350082,18350082,18350082,18350082,18350082,18350083,18350083,18350083,18350083,18350083,18350083,18350083,18350083,18350083,18350083,18350083,18350083,18350083,18350083,18350083,18350083,18350083,18612224,18612224,18612224,18612224,18612224,18612224,18612224,18612224,18612224,18612224,18612225,18612225,18612225,18612225,18612225,18612225,18612225,18612225,18612225,18612225,18612225,18612226,18612226,18612226,18612226,18612226,18612226,18612226,18612226,18612226,18612226,18612226,18612226,18612227,18612227,18612227,18612227,18612227,18612227,18612227,18612227,18612227,18612227,18612227,18612227,18612227,18612227,18612227,18612227,18612227,18874368,18874368,18874368,18874368,18874368,18874368,18874368,18874368,18874368,18874368,18874369,18874369,18874369,18874369,18874369,18874369,18874369,18874369,18874369,18874369,18874370,18874370,18874370,18874370,18874370,18874370,18874370,18874370,18874370,18874370,18874370,18874371,18874371,18874371,18874371,18874371,18874371,18874371,18874371,18874371,18874371,18874371,18874371,18874371,19136512,19136512,19136512,19136512,19136512,19136512,19136512,19136512,19136512,19136512,19136512,19136512,19136512,19136512,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136514,19136514,19136514,19136514,19136514,19136514,19136514,19136514,19136514,19136514,19136514,19136514,19136514,19136514,19136514,19136514,19136514,19136514,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19398656,19398656,19398656,19398656,19398656,19398656,19398656,19398656,19398656,19398656,19398657,19398657,19398657,19398657,19398657,19398657,19398657,19398657,19398657,19398657,19398657,19398657,19398658,19398658,19398658,19398658,19398658,19398658,19398658,19398658,19398658,19398658,19398658,19398658,19398659,19398659,19398659,19398659,19398659,19398659,19398659,19398659,19398659,19398659,19398659,19398659,19398659,22909130,23171274,23188682,23189707,23434440,23449801,23450891,23451980,23467208,23468234,23468368,23469321,23469451,23696649,23713033,23714120,23729354,23730379,23730513,23731466,23731533,23731599,23745738,23746826,23746891,23747850,23747919,23747988,23748877,23748944,23749079,23974089,23975178,23976201,23990472,23991565,23992649,23993547,23993674,23993739,24007881,24008907,24009929,24009999,24010128,24011083,24011147,24011223,24024332,24025353,24025425,24026382,24026448,24026517,24027404,24027473,24027540,24027608,24028496,24028564,24028691,24220943,24237326,24238409,24253643,24254665,24254793,24255689,24255821,24255891,24270092,24271176,24271186,24272202,24272271,24273166,24273234,24273301,24286410,24287496,24287565,24288525,24288592,24289480,24289612,24289675,24289737,24290505,24290639,24290765,24290827,24302792,24303819,24303952,24304968,24305034,24305047,24305995,24306061,24306129,24306953,24307024,24307092,24307162,24307915,24308048,24308169,24308178,24308254,24483084,24499467,24500553,24515787,24516873,24516944,24517961,24518030,24532233,24533195,24533331,24534344,24534409,24535243,24535370,24535433,24535444,24535512,24548623,24549706,24550601,24550730,24550793,24551688,24551757,24551822,24551881,24552712,24552784,24552851,24552920,24552980,24563914,24566026,24566099,24567053,24567119,24568072,24568143,24568209,24568275,24569098,24569227,24569295,24569362,24570122,24570249,24570319,24570379,24570449,24580299,24581390,24582411,24583369,24583438,24583562,24583575,24584524,24584593,24584658,24585485,24585552,24585673,24585690,24585758,24586576,24586708,24586770,24586844,24587534,24587662,24587727,24587737,24587790,24587804,24587919,24760521,24762636,24777999,24779977,24780107,24794313,24795403,24796362,24796489,24796552,24797387,24797518,24797587,24797652,24811849,24812810,24812881,24813896,24813963,24814025,24814794,24814926,24814995,24815112,24827150,24828234,24829129,24829263,24829335,24830284,24830346,24830412,24831244,24831312,24831381,24831497,24831509,24832268,24832338,24832456,24832474,24832535,24832601,24844553,24844622,24845642,24845717,24846671,24846739,24846803,24847689,24847699,24847763,24847830,24847902,24848713,24848790,24848904,24848923,24848987,24849737,24849804,24849867,24849883,24849999,24860872,24861963,24862093,24862991,24863123,24863193,24864075,24864150,24864210,24864277,24865100,24865225,24865233,24865297,24865359,24866058,24866130,24866197,24866261,24866377,24866397,24867084,24867214,24867279,24867347,24867404,24867420,24867534,25739267,25739267,25755651,25772034,25772035,25788419,25804802,25804803,25821187,25821187,25837571,25853955,25870339,25886722,25886723,25903107,25919491,25985026,25985027,25985027,26017795,26034178,26034179,26050563,26066947,26066947,26083331,26083331,26099715,26116099,26132483,26148866,26148867,26181634,26181635,26247171,26247171,26263554,26263555,26296322,26296323,26312707,26312707,26329090,26329091,26345475,26361859,26378243,26394626,26394627,26427394,26443779,26509314,26509315,26509315,26525699,26525699,26542083,26542083,26574850,26574851,26591235,26607619,26624003,26640387,26656771,26673155,26689539,26705923,26771459,26771459,26787843,26787843,26804226,26804227,26820610,26820611,26820611,26853379,26869763,26902531,26918915,26951683,26968067,27033603,27049987,27049987,27066370,27066371,27082755,27082755,27099139,27148290,27164675,27213826,27295747,27295747,27312131,27328515,27328515,27344899,27361283,27377667,27426818,27443203,27475971,27557891,27557891,27574275,27590658,27607042,27607043,27623427,27639811,27656194,27656195,27705347,27738115,27820035,27836419,27852803,27885571,27901955,27934722,27967490,28082178,28098562,28114947,28131331,28147715,28180483,28196867,28246019,28344323,28360706,28360707,28393474,28409859,28442627,28459011,28475395,28524546,28606467,28622851,28655619,28688386,28721155,28753923,28803075,28884994,28901379,28917763,28950531,28999683,29016067,29949955,30081027,30277635,30490627,30588931,30801923,31113219,31277059,31555587,31801347,32079875,32342019,32571395,32849923,32915459,33144835,34078723,34865154,35913730],"rs":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,9,9,9]},"back":{"ks":[7495938,9214979,9477121,9494530,9741315,9767938,10001411,10014722,10052610,10264579,10276865,10294274,10331139,10524675,10527747,10542082,10548227,10557443,10574851,10784770,10786819,10787843,10790915,10802179,10805251,10816514,10819587,10833922,10853379,11047939,11049986,11051010,11054082,11063297,11065347,11067395,11078659,11081730,11095042,11096067,11112449,11308034,11311106,11312130,11314178,11323395,11326467,11328514,11330562,11340803,11343874,11346946,11358211,11373569,11390979,11572225,11573251,11575297,11576322,11587587,11589634,11592706,11602946,11604995,11607042,11609091,11622402,11636738,11643907,11653123,11834371,11836419,11849729,11851779,11854851,11869185,11882499,11896834,11915267,13209603,13257731,13261827,13277186,13326338,13490178,13507587,13523971,13555715,13748226,13769730,13797378,13962243,14027779,14049283,14240770,14289923,14311426,14355459,14520323,14555139,14747651,14796803,14851074,14885891,15045635,15144962,15306755,15338499,15568899,15813635,15882242,16094211,16372739,17039360,17039360,17039360,17039361,17039361,17039361,17039362,17039362,17039362,17039363,17039363,17039363,17301504,17301504,17301504,17301504,17301505,17301505,17301506,17301506,17301506,17301506,17301507,17301507,17301507,17301507,17563648,17563648,17563648,17563649,17563649,17563649,17563650,17563650,17563650,17563650,17563651,17563651,17563651,17563651,17563651,17825792,17825792,17825792,17825793,17825793,17825793,17825793,17825794,17825794,17825794,17825794,17825795,17825795,17825795,17825795,17825795,17825795,18087936,18087936,18087936,18087937,18087937,18087937,18087937,18087937,18087938,18087938,18087938,18087938,18087938,18087939,18087939,18087939,18087939,18087939,18087939,18350080,18350080,18350080,18350081,18350081,18350081,18350081,18350081,18350081,18350082,18350082,18350082,18350082,18350082,18350083,18350083,18350083,18350083,18350083,18350083,18612224,18612224,18612224,18612224,18612225,18612225,18612225,18612225,18612225,18612226,18612226,18612226,18612226,18612226,18612226,18612227,18612227,18612227,18612227,18612227,18612227,18612227,18874368,18874368,18874368,18874368,18874369,18874369,18874369,18874369,18874369,18874370,18874370,18874370,18874370,18874370,18874370,18874371,18874371,18874371,18874371,18874371,18874371,18874371,19136512,19136512,19136512,19136512,19136512,19136512,19136512,19136512,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136513,19136514,19136514,19136514,19136514,19136514,19136514,19136514,19136514,19136514,19136514,19136514,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19136515,19398656,19398656,19398656,19398656,19398656,19398656,19398657,19398657,19398657,19398657,19398657,19398657,19398657,19398657,19398658,19398658,19398658,19398658,19398658,19398658,19398659,19398659,19398659,19398659,19398659,19398659,19398659,19398659,19398659,22910219,23188746,23417032,23449800,23451849,23466185,23468232,23468365,23469390,23696655,23714056,23729418,23730506,23731465,23731598,23746762,23746899,23747915,23748875,23748946,23958798,23975179,23976266,23990475,23992587,23993546,23993678,23993745,24007881,24008974,24010058,24010123,24011018,24011089,24011154,24025352,24026314,24026508,24027405,24027530,24027608,24028431,24028554,24028635,24220875,24238345,24238416,24253705,24254731,24255756,24255887,24270026,24271117,24272074,24272275,24273230,24273297,24285387,24287432,24287570,24288592,24288662,24289612,24289682,24289752,24290574,24290701,24290772,24301768,24303816,24303944,24304841,24304972,24305040,24305995,24306066,24306134,24306959,24307081,24307155,24307218,24307982,24308107,24308176,24308238,24308304,24308319,24483085,24499468,24500495,24515848,24516873,24517899,24518030,24532169,24533258,24534284,24534409,24535242,24535311,24535432,24535498,24535506,24549579,24549712,24550668,24550793,24551626,24551762,24551883,24552777,24552852,24552980,24565001,24566088,24567048,24567176,24567189,24568076,24568146,24568213,24568275,24569097,24569164,24569232,24569294,24569356,24569374,24570184,24570252,24570318,24570380,24570447,24581323,24582414,24582481,24583435,24583561,24584394,24584460,24584593,24584661,24585484,24585555,24585620,24585736,24585751,24586577,24586646,24586705,24586765,24586778,24586837,24587593,24587666,24587725,24587788,24587849,24587914,24587936,24745229,24761611,24762633,24762699,24777928,24778954,24779082,24779089,24780044,24780110,24793290,24794383,24795404,24795472,24796427,24796490,24796553,24796566,24797455,24797520,24797586,24797648,24809672,24810762,24811785,24811856,24812808,24812874,24812936,24812950,24813832,24813900,24813904,24813967,24814028,24814040,24814857,24814925,24814986,24814992,24815052,24815114,24815130,24827146,24828169,24828235,24829131,24829196,24829261,24829325,24829332,24830217,24830283,24830346,24830408,24830424,24831246,24831312,24831373,24831383,24831437,24831448,24831506,24831519,24832266,24832330,24832396,24832402,24832461,24832472,24832527,24832539,24832591,24832598,24842441,24843533,24844552,24844616,24844625,24845576,24845583,24845649,24845710,24845719,24846605,24846668,24846728,24846736,24846742,24846796,24846805,24847563,24847688,24847699,24847762,24847819,24847883,24847893,24848585,24848712,24848776,24848784,24848840,24848855,24848915,24848927,24848981,24849608,24849676,24849739,24849800,24849809,24849865,24849881,24849937,24849951,24850002,24850063,24850086,24859912,24860872,24860940,24861002,24861009,24861960,24862027,24862034,24862096,24862103,24862984,24863048,24863055,24863114,24863120,24863177,24863182,24863186,24863193,24863947,24864075,24864082,24864141,24864148,24864202,24864209,24864217,24864265,24864272,24864277,24864968,24865034,24865096,24865103,24865162,24865171,24865225,24865233,24865242,24865290,24865294,24865301,24865310,24865359,24865366,24865992,24866059,24866120,24866186,24866190,24866196,24866251,24866260,24866265,24866315,24866323,24866329,24866377,24866385,24866396,24866447,24866455,24866464,24867017,24867083,24867085,24867150,24867155,24867211,24867218,24867272,24867281,24867285,24867337,24867343,24867348,24867352,24867356,24867401,24867405,24867411,24867416,24867421,24867465,24867473,24867481,24867488,24867531,24867537,24867544,24867552,25739266,25739267,25739267,25739267,25755651,25755651,25755651,25772035,25788418,25788419,25804802,25804803,25821187,25837571,25853955,25886722,25919491,25985026,25985027,25985027,25985027,25985027,25985027,26017794,26017795,26017795,26034179,26050562,26050563,26066947,26083330,26099715,26116099,26148866,26247170,26247171,26247171,26247171,26247171,26247171,26247171,26263555,26263555,26263555,26263555,26263555,26296323,26296323,26312707,26329090,26345475,26378243,26427395,26509314,26509315,26509315,26509315,26509315,26509315,26525698,26525699,26525699,26525699,26525699,26525699,26542083,26542083,26542083,26542083,26574850,26574851,26591234,26591235,26607619,26640387,26771458,26771459,26771459,26771459,26771459,26771459,26771459,26787842,26787843,26787843,26787843,26787843,26804226,26804227,26804227,26804227,26820610,26820611,26820611,26820611,26853378,26853379,26869763,26869763,26886147,26918914,26935299,27033602,27033603,27033603,27033603,27033603,27049986,27049987,27049987,27049987,27049987,27049987,27066371,27066371,27066371,27066371,27082755,27082755,27082755,27099139,27099139,27099139,27131907,27148291,27181058,27230211,27295747,27295747,27295747,27295747,27295747,27312130,27312131,27312131,27312131,27312131,27328514,27328515,27328515,27328515,27344899,27344899,27361282,27361283,27361283,27361283,27377667,27377667,27377667,27410435,27426818,27443203,27459587,27557890,27557891,27557891,27557891,27557891,27557891,27557891,27574275,27574275,27574275,27574275,27574275,27590659,27590659,27590659,27607043,27607043,27623426,27623427,27623427,27623427,27639810,27639811,27639811,27656195,27656195,27656195,27688963,27705347,27721731,27738114,27820034,27820035,27820035,27820035,27820035,27836419,27836419,27836419,27836419,27852803,27852803,27852803,27869186,27869187,27869187,27885571,27885571,27885571,27901955,27901955,27901955,27918339,27918339,27934723,27934723,27934723,27934723,27967491,27983875,28000259,28082178,28082179,28082179,28082179,28082179,28082179,28098562,28098563,28098563,28098563,28114946,28114947,28114947,28114947,28131331,28131331,28147714,28147715,28147715,28164099,28164099,28180482,28180483,28180483,28196867,28196867,28196867,28213251,28213251,28246018,28246019,28262403,28344322,28344323,28344323,28344323,28360706,28360707,28360707,28360707,28377091,28377091,28377091,28393475,28393475,28393475,28409859,28409859,28426242,28426243,28426243,28442627,28442627,28442627,28459011,28459011,28475394,28475395,28475395,28491779,28524547,28540931,28606466,28606467,28606467,28606467,28606467,28622851,28622851,28622851,28639235,28639235,28639235,28655619,28655619,28672002,28672003,28672003,28688386,28688387,28688387,28704771,28721154,28721155,28721155,28737539,28753923,28753923,28770307,28803075,28868610,28868611,28868611,28884994,28884995,28884995,28901379,28901379,28917763,28934146,28934147,28950531,28966914,28966915,28983299,28999683,29016067,29032451,29048835,29966339,29982723,29999107,29999107,30015491,30031875,30031875,30031875,30048259,30048259,30048259,30064643,30064643,30064643,30081027,30081027,30097411,30097411,30097411,30113795,30212099,30244867,30261251,30277635,30277635,30294019,30294019,30294019,30294019,30310403,30310403,30310403,30326787,30326787,30326787,30343171,30343171,30359555,30359555,30457859,30507011,30523395,30539779,30539779,30556163,30556163,30556163,30572547,30572547,30572547,30572547,30588931,30588931,30605315,30605315,30605315,30621699,30621699,30638083,30720003,30736387,30769155,30769155,30785539,30801923,30801923,30801923,30818307,30818307,30834691,30834691,30834691,30851075,30851075,30867459,30867459,30883843,30883843,30900227,30998531,31014915,31047683,31064067,31064067,31064067,31080451,31080451,31080451,31096835,31096835,31096835,31096835,31113219,31113219,31113219,31129603,31129603,31145987,31145987,31145987,31162371,31162371,31260675,31277059,31293443,31326211,31326211,31326211,31342595,31342595,31342595,31358979,31358979,31358979,31358979,31375363,31375363,31375363,31391747,31391747,31408131,31408131,31408131,31408131,31424515,31424515,31522819,31555587,31555587,31571971,31571971,31571971,31604739,31604739,31621123,31621123,31621123,31621123,31637507,31637507,31637507,31653891,31653891,31670275,31670275,31670275,31686659,31686659,31784963,31801347,31817731,31834115,31834115,31850499,31850499,31850499,31850499,31850499,31883267,31883267,31883267,31883267,31899651,31899651,31899651,31916035,31916035,31916035,31932419,31932419,31948803,31948803,32063491,32079875,32096259,32096259,32112643,32112643,32112643,32129027,32129027,32129027,32129027,32129027,32129027,32161795,32161795,32161795,32161795,32178179,32178179,32178179,32194563,32194563,32194563,32194563,32210947,32210947,32210947,32292867,32325635,32342019,32358403,32374787,32374787,32374787,32391171,32391171,32391171,32391171,32407555,32407555,32407555,32407555,32407555,32407555,32407555,32407555,32440323,32440323,32440323,32456707,32456707,32456707,32456707,32473091,32473091,32473091,32571395,32604163,32604163,32620547,32620547,32636931,32636931,32653315,32653315,32653315,32669699,32669699,32669699,32669699,32686083,32686083,32686083,32686083,32686083,32718851,32718851,32718851,32718851,32718851,32735235,32735235,32735235,32735235,32833539,32866307,32866307,32882691,32899075,32899075,32915459,32915459,32915459,32931843,32931843,32931843,32931843,32948227,32948227,32948227,32948227,32948227,32948227,32948227,32948227,32964611,32964611,32964611,32964611,32964611,32964611,32964611,32997379,32997379,32997379,32997379,32997379,33062915,33112067,33128451,33144835,33161219,33161219,33177603,33177603,33177603,33193987,33193987,33193987,33193987,33210371,33210371,33210371,33210371,33210371,33210371,33226755,33226755,33226755,33226755,33226755,33243139,33243139,33243139,33243139,33243139,33243139,33243139,33816576,33816576,33816576,33816576,33816576,33816577,33816577,33816577,33816577,33816578,33816578,33816578,33816578,33816578,33816578,33816579,33816579,33816579,33816579,34078720,34078720,34078720,34078720,34078720,34078720,34078720,34078721,34078721,34078721,34078721,34078721,34078721,34078721,34078721,34078722,34078722,34078722,34078722,34078722,34078722,34078722,34078722,34078723,34078723,34078723,34078723,34078723,34078723,34078723,34078723,34078723,34340864,34340864,34340864,34340864,34340864,34340864,34340864,34340864,34340864,34340865,34340865,34340865,34340865,34340865,34340865,34340865,34340865,34340866,34340866,34340866,34340866,34340866,34340866,34340867,34340867,34340867,34340867,34340867,34340867,34340867,34340867,34340867,34603008,34603008,34603008,34603008,34603008,34603008,34603008,34603008,34603008,34603009,34603009,34603009,34603009,34603009,34603009,34603009,34603009,34603009,34603010,34603010,34603010,34603010,34603010,34603010,34603010,34603010,34603010,34603011,34603011,34603011,34603011,34603011,34603011,34603011,34603011,34603011,34603011,34865152,34865152,34865152,34865152,34865152,34865152,34865152,34865152,34865153,34865153,34865153,34865153,34865153,34865153,34865153,34865153,34865153,34865154,34865154,34865154,34865154,34865154,34865154,34865154,34865154,34865154,34865154,34865155,34865155,34865155,34865155,34865155,34865155,34865155,34865155,34865155,34865155,35127296,35127296,35127296,35127296,35127296,35127296,35127296,35127296,35127297,35127297,35127297,35127297,35127297,35127297,35127297,35127297,35127297,35127297,35127298,35127298,35127298,35127298,35127298,35127298,35127298,35127298,35127298,35127299,35127299,35127299,35127299,35127299,35127299,35127299,35127299,35127299,35127299,35389440,35389440,35389440,35389440,35389440,35389440,35389440,35389440,35389440,35389440,35389440,35389441,35389441,35389441,35389441,35389441,35389441,35389441,35389441,35389441,35389441,35389442,35389442,35389442,35389442,35389442,35389442,35389442,35389442,35389442,35389442,35389442,35389443,35389443,35389443,35389443,35389443,35389443,35389443,35389443,35389443,35389443,35389443,35651584,35651584,35651584,35651584,35651584,35651584,35651584,35651584,35651584,35651584,35651584,35651584,35651585,35651585,35651585,35651585,35651585,35651585,35651585,35651585,35651585,35651585,35651585,35651585,35651586,35651586,35651586,35651586,35651586,35651586,35651586,35651586,35651586,35651586,35651587,35651587,35651587,35651587,35651587,35651587,35651587,35651587,35651587,35651587,35651587,35651587,35651587,35913728,35913728,35913728,35913728,35913728,35913728,35913728,35913728,35913728,35913728,35913728,35913728,35913728,35913728,35913728,35913728,35913728,35913728,35913728,35913728,35913728,35913728,35913729,35913729,35913729,35913729,35913729,35913729,35913729,35913729,35913729,35913729,35913729,35913729,35913729,35913729,35913729,35913729,35913729,35913729,35913729,35913730,35913730,35913730,35913730,35913730,35913730,35913730,35913730,35913730,35913730,35913730,35913730,35913730,35913730,35913730,35913730,35913730,35913730,35913730,35913730,35913730,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,35913731,36175872,36175872,36175872,36175872,36175872,36175872,36175872,36175872,36175872,36175872,36175872,36175872,36175872,36175872,36175872,36175872,36175872,36175872,36175872,36175872,36175873,36175873,36175873,36175873,36175873,36175873,36175873,36175873,36175873,36175873,36175873,36175873,36175873,36175873,36175873,36175873,36175873,36175873,36175873,36175873,36175873,36175874,36175874,36175874,36175874,36175874,36175874,36175874,36175874,36175874,36175874,36175874,36175874,36175874,36175874,36175874,36175874,36175874,36175874,36175874,36175874,36175874,36175874,36175875,36175875,36175875,36175875,36175875,36175875,36175875,36175875,36175875,36175875,36175875,36175875,36175875,36175875,36175875,36175875,36175875,36175875,36175875,36175875,36175875,38273027,38273027,38273027,38273027,38273027,38273027,38273027,38273027,38273027,38273027,38273027,38273027,38273027,38535171,38535171,38535171,38535171,38535171,38535171,38535171,38535171,38535171,38535171,38535171,38535171,38797315,38797315,38797315,38797315,38797315,38797315,38797315,38797315,38797315,38797315,38797315,38797315,38797315,39059459,39059459,39059459,39059459,39059459,39059459,39059459,39059459,39059459,39059459,39059459,39059459,39321603,39321603,39321603,39321603,39321603,39321603,39321603,39321603,39321603,39321603,39321603,39321603,39321603,39321603,39583747,39583747,39583747,39583747,39583747,39583747,39583747,39583747,39583747,39583747,39583747,39583747,39583747,39845891,39845891,39845891,39845891,39845891,39845891,39845891,39845891,39845891,39845891,39845891,39845891,39845891,39845891,40108035,40108035,40108035,40108035,40108035,40108035,40108035,40108035,40108035,40108035,40108035,40108035,40108035,40108035,40108035,40370179,40370179,40370179,40370179,40370179,40370179,40370179,40370179,40370179,40370179,40370179,40370179,40370179,40370179,40370179,40632323,40632323,40632323,40632323,40632323,40632323,40632323,40632323,40632323,40632323,40632323,40632323,40632323,40632323,40632323,40632323,40632323,40894467,40894467,40894467,40894467,40894467,40894467,40894467,40894467,40894467,40894467,40894467,40894467,40894467,40894467,40894467,40894467,40894467,41156611,41156611,41156611,41156611,41156611,41156611,41156611,41156611,41156611,41156611,41156611,41156611,41156611,41156611,41156611,41156611,41156611,41156611,41156611,41156611,41156611,41418755,41418755,41418755,41418755,41418755,41418755,41418755,41418755,41418755,41418755,41418755,41418755,41418755,41418755,41418755,41418755,41418755,41418755,41418755,41418755,41418755,41418755],"rs":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9]}}</script>
+<script>
+(function () {
+  var SUIT = ['♦', '♣', '♥', '♠'], RANK = ['', '', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+  var state = { hand: [], fu: [], target: 'hand', last: null, sel: 0 };
+  var $ = function (id) { return document.getElementById(id); };
+  var worker = null, workerURL = null;
+
+  function isJ(id) { return id >= 52; }
+  function red(id) { return !isJ(id) && ((id & 3) === 0 || (id & 3) === 2); }
+  function label(id) { return isJ(id) ? 'Joker' : RANK[(id >> 2) + 2] + SUIT[id & 3]; }
+  function sortCards(a) { return a.slice().sort(function (x, y) { if (isJ(x) !== isJ(y)) return isJ(x) ? -1 : 1; return y - x; }); }
+  function cardEl(id, small, tag) {
+    var el = document.createElement(tag || 'span');
+    el.className = 'c' + (small ? ' sm' : '') + (isJ(id) ? ' jk' : red(id) ? ' red' : '');
+    if (isJ(id)) el.innerHTML = 'JOKER<span class="s">★</span>';
+    else el.innerHTML = RANK[(id >> 2) + 2] + '<span class="s">' + SUIT[id & 3] + '</span>';
+    el.setAttribute('aria-label', label(id));
+    return el;
+  }
+
+  // ---- deck picker ----
+  function buildDeck() {
+    var deck = $('deck'); deck.innerHTML = '';
+    [3, 2, 1, 0].forEach(function (s) {
+      var row = document.createElement('div'); row.className = 'deckrow';
+      for (var r = 14; r >= 2; r--) {
+        var id = (r - 2) * 4 + s, b = document.createElement('button');
+        b.type = 'button'; b.className = 'pick' + (s === 0 || s === 2 ? ' red' : ''); b.dataset.id = id;
+        b.innerHTML = RANK[r] + '<span class="s">' + SUIT[s] + '</span>';
+        b.setAttribute('aria-label', label(id));
+        row.appendChild(b);
+      }
+      deck.appendChild(row);
+    });
+    var jr = document.createElement('div'); jr.className = 'jokers';
+    for (var j = 52; j < 56; j++) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'pick'; b.dataset.id = j;
+      b.style.color = 'var(--gold)'; b.innerHTML = 'Joker<span class="s">★</span>'; b.setAttribute('aria-label', 'Joker ' + (j - 51));
+      jr.appendChild(b);
+    }
+    deck.appendChild(jr);
+    deck.addEventListener('click', function (e) { var b = e.target.closest('.pick'); if (b) toggle(+b.dataset.id); });
+  }
+  function toggle(id) {
+    var hi = state.hand.indexOf(id);
+    if (hi >= 0) state.hand.splice(hi, 1);
+    else {
+      if (state.hand.length >= 14) { say('Your hand already has 14 cards. Remove one first.', true); return; }
+      state.hand.push(id);
+    }
+    say(''); render();
+  }
+  function render() {
+    $('n-hand').textContent = state.hand.length + '/14';
+    document.querySelectorAll('#deck .pick').forEach(function (b) { b.classList.toggle('inhand', state.hand.indexOf(+b.dataset.id) >= 0); });
+    tray('tray-hand', state.hand, 'Click cards in the deck or type them above.');
+  }
+  function tray(elId, arr, empty) {
+    var t = $(elId); t.innerHTML = '';
+    if (!arr.length) { t.innerHTML = '<span class="empty">' + empty + '</span>'; return; }
+    sortCards(arr).forEach(function (id) { var c = cardEl(id, false, 'button'); c.type = 'button'; c.title = 'Remove ' + label(id); c.onclick = function () { toggle(id); }; t.appendChild(c); });
+  }
+  function say(m, err) { $('msg').textContent = m; $('msg').className = 'msg' + (err ? ' err' : ''); }
+
+  // ---- text entry ----
+  var RMAP = { A: 14, K: 13, Q: 12, J: 11, T: 10, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2, '1': 14 };
+  var SMAP = { s: 3, h: 2, c: 1, d: 0, '♠': 3, '♥': 2, '♣': 1, '♦': 0, '♤': 3, '♡': 2, '♧': 1, '♢': 0 };
+  function parse(text, otherPile) {
+    var toks = text.replace(/,/g, ' ').trim().split(/\s+/).filter(Boolean), out = [], bad = [];
+    var usedJ = otherPile.filter(isJ);
+    toks.forEach(function (t) {
+      if (/^(jk|jo|joker|x|\*|★|🃏)/i.test(t)) {
+        for (var j = 52; j < 56; j++) if (out.indexOf(j) < 0 && usedJ.indexOf(j) < 0) { out.push(j); return; }
+        bad.push(t + ' (only 4 jokers)'); return;
+      }
+      var m = t.match(/^(10|[2-9TJQKA1])(.)$/i);
+      if (!m || SMAP[m[2].toLowerCase()] === undefined) { bad.push(t); return; }
+      var id = (RMAP[m[1].toUpperCase()] - 2) * 4 + SMAP[m[2].toLowerCase()];
+      if (out.indexOf(id) >= 0 || otherPile.indexOf(id) >= 0) { bad.push(t + ' (repeated)'); return; }
+      out.push(id);
+    });
+    return { cards: out, bad: bad };
+  }
+  $('entry-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var p = parse($('entry').value, []);
+    if (p.bad.length) { say('Couldn’t read: ' + p.bad.join(', '), true); return; }
+    if (p.cards.length > 14) { say('That is ' + p.cards.length + ' cards. A hand has 14.', true); return; }
+    state.hand = p.cards; $('entry').value = ''; say(''); render();
+  });
+  $('clear').onclick = function () { state.hand = []; say(''); render(); };
+  $('random').onclick = function () {
+    var d = []; for (var i = 0; i < 56; i++) d.push(i);
+    for (i = 55; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = d[i]; d[i] = d[j]; d[j] = t; }
+    state.hand = d.slice(0, 14); say(''); render(); solve();
+  };
+  $('solve').onclick = solve;
+
+  // ---- solver worker ----
+  function makeWorker() {
+    var src = $('engine-src').textContent + '\nvar TJ=' + $('tables-src').textContent + ';\n' +
+      'TABLES={front:buildTable(TJ.front.ks,TJ.front.rs),mid:buildTable(TJ.mid.ks,TJ.mid.rs),back:buildTable(TJ.back.ks,TJ.back.rs)};\n' +
+      'onmessage=function(e){var r=solveHand(e.data,function(d,t,s){postMessage({type:"progress",done:d,total:t,res:s});});postMessage({type:"done",res:r});};';
+    if (!workerURL) workerURL = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+    return new Worker(workerURL);
+  }
+  function solve() {
+    if (state.hand.length !== 14) { say('Your hand needs exactly 14 cards (it has ' + state.hand.length + ').', true); return; }
+    say('');
+    if (worker) worker.terminate();
+    var sims = +$('sims').value;
+    state.sel = 0;
+    $('progress').hidden = false; $('progress').firstElementChild.style.width = '2%';
+    $('res-body').innerHTML = '<p class="note">Checking every legal setup and dealing out opponent hands…</p>';
+    $('solve').disabled = true; $('solve').textContent = 'Solving…';
+    var payload = { hand: state.hand.slice(), sims: sims, K: 150 };
+    try {
+      worker = makeWorker();
+      worker.onmessage = function (e) {
+        var m = e.data;
+        if (m.type === 'progress') { $('progress').firstElementChild.style.width = (100 * m.done / m.total) + '%'; show(m.res, false); }
+        else { finish(m.res); worker.terminate(); worker = null; }
+      };
+      worker.onerror = function () { worker = null; runInline(payload); };
+      worker.postMessage(payload);
+    } catch (err) { runInline(payload); }
+  }
+  function runInline(payload) {
+    setTimeout(function () {
+      var ctx = {}; (new Function($('engine-src').textContent + '\nvar TJ=' + $('tables-src').textContent + ';TABLES={front:buildTable(TJ.front.ks,TJ.front.rs),mid:buildTable(TJ.mid.ks,TJ.mid.rs),back:buildTable(TJ.back.ks,TJ.back.rs)};this.solveHand=solveHand;')).call(ctx);
+      finish(ctx.solveHand(payload));
+    }, 30);
+  }
+  function finish(res) {
+    $('progress').hidden = true; $('solve').disabled = false; $('solve').textContent = 'Solve hand';
+    show(res, true);
+  }
+
+  // ---- results ----
+  function sg(x, d) { d = d === undefined ? 2 : d; var s = x.toFixed(d); return (x > 0.0049 ? '+' : '') + (s === '-0.00' ? '0.00' : s); }
+  function cls(x) { return x > 0.005 ? 'pos' : x < -0.005 ? 'neg' : ''; }
+  function pct(x) { return Math.round(x * 100) + '%'; }
+  function pct1(x) { return (x * 100).toFixed(1) + '%'; }
+  function show(res, final) {
+    state.last = res;
+    var body = $('res-body'), tag = $('res-tag');
+    if (res.error) { body.innerHTML = '<p class="msg err">' + res.error + '</p>'; return; }
+    tag.hidden = true;
+    var simsTxt = (final ? '' : 'Running · ') + res.sims.toLocaleString() + ' deals';
+    var list = res.results, i = Math.min(state.sel, list.length - 1), b = list[i];
+    var html = '<div class="summary"><div><div class="label">' + (i === 0 ? 'Expected points per deal, all 3 opponents' : 'Setup #' + (i + 1) + ' · expected points per deal') + '</div>' +
+      '<div class="ev ' + cls(b.ev.total) + '">' + sg(b.ev.total) + '</div></div>' +
+      '<div class="evsub">± ' + b.se.toFixed(2) + ' · ' + sg(b.ev.total / 3) + ' per opponent<br>' + simsTxt + '</div></div>';
+    html += '<div class="rowset">' + rowHTML('Front', '3 cards', b, 'F') + rowHTML('Middle', '5 cards', b, 'M') + rowHTML('Back', '5 cards', b, 'B') + discardHTML(b) + '</div>';
+    html += '<div class="stats">' +
+      stat('Scoop rate', pct(b.scoop)) + stat('Get scooped', pct(b.scooped)) + stat('Scoop all 3', pct1(b.scoopAll)) + stat('Opp. scoops all', pct1(b.oppScoopAll)) +
+      stat('Setups tested', res.candidates.toLocaleString()) + '</div>';
+    if (list.length > 1) {
+      html += '<div><div class="headline"><h2>Other setups</h2><span class="note">Click a row to view it</span></div><div class="tablewrap"><table><thead><tr><th>#</th><th>Front</th><th>Middle</th><th>Back</th><th>Discard</th><th class="num">Total</th><th class="num">vs best</th></tr></thead><tbody>';
+      list.slice(0, 10).forEach(function (r, k) {
+        html += '<tr class="alt' + (k === i ? ' sel' : '') + '" data-k="' + k + '"><td class="num">' + (k + 1) + '</td>' + cell(r, 'F') + cell(r, 'M') + cell(r, 'B') + '<td><div class="mini" data-ids="[' + r.discard + ']"></div></td>' +
+          '<td class="num ' + cls(r.ev.total) + '">' + sg(r.ev.total) + '</td><td class="num">' + (k === 0 ? '—' : sg(r.ev.total - list[0].ev.total)) + '</td></tr>';
+      });
+      html += '</tbody></table></div></div>';
+    }
+    body.innerHTML = html;
+    body.querySelectorAll('.row .cards').forEach(function (el) { var ids = JSON.parse(el.dataset.ids); ids.forEach(function (id) { el.appendChild(cardEl(id)); }); });
+    body.querySelectorAll('td .mini').forEach(function (el) { JSON.parse(el.dataset.ids).forEach(function (id) { el.appendChild(cardEl(id, true)); }); });
+    body.querySelectorAll('tr.alt').forEach(function (tr) { tr.onclick = function () { state.sel = +tr.dataset.k; show(state.last, true); }; });
+  }
+  function rowHTML(name, size, r, k) {
+    var roy = r.roy[k] ? '<span class="roy">+' + r.roy[k] + ' royalty</span>' : '';
+    return '<div class="row"><div class="name">' + name + '<small>' + size + '</small></div>' +
+      '<div><div class="cards" data-ids="' + JSON.stringify(sortCards(r.rows[k])) + '"></div><div class="desc"><b>' + r.desc[k] + '</b>' + roy + '</div></div>' +
+      '<div class="pts"><div class="v ' + cls(r.ev[k]) + '">' + sg(r.ev[k]) + '</div><div class="w">wins ' + pct(r.win[k]) + '</div></div></div>';
+  }
+  function cell(r, k) { return '<td><div class="mini" data-ids="' + JSON.stringify(sortCards(r.rows[k])) + '"></div><div class="d">' + r.desc[k] + ' · <span class="' + cls(r.ev[k]) + '">' + sg(r.ev[k]) + '</span></div></td>'; }
+  function discardHTML(r) {
+    return '<div class="row discard"><div class="name">Discard<small>1 card</small></div>' +
+      '<div><div class="cards" data-ids="[' + r.discard + ']"></div><div class="desc">Out of play</div></div><div class="pts"></div></div>';
+  }
+  function stat(k, v) { return '<div class="stat"><div class="k">' + k + '</div><div class="v">' + v + '</div></div>'; }
+
+  // ---- start with an example ----
+  buildDeck();
+  var ex = parse('As Kd Qh Jc 9s 9d 7c 7h 5s 4d 3c 2h jk 6c', []);
+  state.hand = ex.cards;
+  render();
+  $('res-title').textContent = 'Best setup';
+  $('sims').value = '250';
+  solve();
+  $('sims').value = '800';
+  say('Example hand loaded. Replace it with your own cards.');
+})();
+</script>
+
+</body></html>
